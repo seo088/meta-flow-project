@@ -1,0 +1,51 @@
+<!doctype html>
+<html lang="ko">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Mini Calculator</title>
+    <link rel="stylesheet" href="./styles.css" />
+  </head>
+  <body>
+    <main class="page-shell">
+      <section class="calculator" aria-label="Mini calculator">
+        <div class="face" aria-hidden="true">
+          <span></span>
+          <span></span>
+        </div>
+
+        <header class="calculator-header">
+          <p class="eyebrow">Calculator test</p>
+          <h1>Mini Calc</h1>
+        </header>
+
+        <form id="calculator-form" class="calculator-form">
+          <label class="number-field">
+            <span>First number</span>
+            <input id="first-number" type="number" step="any" inputmode="decimal" placeholder="12" />
+          </label>
+
+          <div id="operation-buttons" class="operation-buttons" aria-label="Operation"></div>
+
+          <label class="number-field">
+            <span>Second number</span>
+            <input id="second-number" type="number" step="any" inputmode="decimal" placeholder="3" />
+          </label>
+
+          <div class="actions">
+            <button class="primary-action" type="submit">=</button>
+            <button id="clear-button" class="ghost-action" type="button">Clear</button>
+          </div>
+        </form>
+
+        <section class="result-panel" aria-live="polite">
+          <p id="result-label">Add result</p>
+          <output id="result-value">0</output>
+        </section>
+      </section>
+    </main>
+
+    <script src="./operations.js"></script>
+    <script src="./app.js"></script>
+  </body>
+</html>
