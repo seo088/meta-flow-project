@@ -5,6 +5,11 @@
       symbol: '+',
       apply: (left, right) => left + right,
     },
+    subtract: {
+      label: 'Subtract',
+      symbol: '-',
+      apply: (left, right) => left - right,
+    },
     multiply: {
       label: 'Multiply',
       symbol: 'x',

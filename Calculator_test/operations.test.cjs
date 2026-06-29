@@ -7,20 +7,26 @@ test('adds negative and decimal numbers', () => {
   assert.equal(calculate('add', -2.5, 4), 1.5);
 });
 
+test('subtracts decimal numbers', () => {
+  assert.equal(calculate('subtract', 10.5, 3.25), 7.25);
+});
+
 test('multiplies whole numbers', () => {
   assert.equal(calculate('multiply', 6, 7), 42);
 });
 
 test('keeps operation definitions merge-friendly', () => {
-  assert.deepEqual(Object.keys(OPERATIONS), ['add', 'multiply']);
+  assert.deepEqual(Object.keys(OPERATIONS), ['add', 'subtract', 'multiply']);
   assert.equal(OPERATIONS.add.symbol, '+');
+  assert.equal(OPERATIONS.subtract.symbol, '-');
   assert.equal(OPERATIONS.multiply.symbol, 'x');
   assert.equal(typeof OPERATIONS.add.apply, 'function');
+  assert.equal(typeof OPERATIONS.subtract.apply, 'function');
   assert.equal(typeof OPERATIONS.multiply.apply, 'function');
 });
 
 test('rejects unsupported operations clearly', () => {
-  assert.throws(() => calculate('subtract', 3, 1), /Unsupported operation/);
+  assert.throws(() => calculate('divide', 3, 1), /Unsupported operation/);
 });
 
 test('rejects non-numeric input clearly', () => {
