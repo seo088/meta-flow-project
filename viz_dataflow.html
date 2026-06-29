@@ -1,0 +1,635 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>군산시 기반 가상 시나리오 — 데이터 흐름</title>
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+body{font-family:'Segoe UI',system-ui,sans-serif;background:#0a0e1a;color:#e2e8f0;overflow-x:hidden}
+.header{text-align:center;padding:28px 20px 16px;background:linear-gradient(135deg,#0f172a,#1a2535);border-bottom:1px solid #1e293b}
+.header h1{font-size:26px;font-weight:800;background:linear-gradient(135deg,#f97316,#fbbf24);-webkit-background-clip:text;-webkit-text-fill-color:transparent}
+.header p{color:#94a3b8;font-size:13px;margin-top:4px}
+.main{max-width:1400px;margin:0 auto;padding:24px 20px}
+
+/* 시나리오 타임라인 */
+.phases{display:grid;grid-template-columns:repeat(3,1fr);gap:16px;margin-bottom:32px}
+.phase{border-radius:14px;padding:18px;border:1px solid #334155;cursor:pointer;transition:all .3s;position:relative}
+.phase:hover{transform:translateY(-3px);box-shadow:0 8px 24px rgba(0,0,0,.4)}
+.phase.active{border-width:2px}
+.phase-num{font-size:11px;font-weight:700;padding:2px 8px;border-radius:20px;display:inline-block;margin-bottom:8px;letter-spacing:1px}
+.phase-title{font-size:15px;font-weight:700;margin-bottom:6px}
+.phase-desc{font-size:12px;color:#94a3b8;line-height:1.6}
+.phase-items{margin-top:10px}
+.phase-item{font-size:11px;color:#64748b;padding:2px 0;display:flex;align-items:center;gap:6px}
+.phase-item::before{content:'';width:4px;height:4px;border-radius:50%;flex-shrink:0}
+.p1{background:linear-gradient(135deg,#0f2b1d,#1a2e35)}.p1 .phase-num{background:rgba(74,222,128,.2);color:#4ade80}
+.p1.active{border-color:#4ade80}.p1 .phase-item::before{background:#4ade80}
+.p2{background:linear-gradient(135deg,#1a2535,#1e293b)}.p2 .phase-num{background:rgba(56,189,248,.2);color:#38bdf8}
+.p2.active{border-color:#38bdf8}.p2 .phase-item::before{background:#38bdf8}
+.p3{background:linear-gradient(135deg,#2a1f2e,#1e293b)}.p3 .phase-num{background:rgba(167,139,250,.2);color:#a78bfa}
+.p3.active{border-color:#a78bfa}.p3 .phase-item::before{background:#a78bfa}
+
+/* 지오펜싱 지도 */
+.map-section{margin-bottom:32px}
+.section-title{font-size:16px;font-weight:700;margin-bottom:16px;display:flex;align-items:center;gap:8px}
+.geo-map{position:relative;width:100%;height:500px;background:#0f1729;border-radius:16px;border:1px solid #1e293b;overflow:hidden}
+.geo-map svg{width:100%;height:100%}
+.zone-label{font-size:11px;fill:#e2e8f0;font-weight:700;text-anchor:middle}
+.zone-sublabel{font-size:9px;fill:#94a3b8;text-anchor:middle}
+.zone-circle{stroke-width:2;fill-opacity:.12;cursor:pointer;transition:all .3s}
+.zone-circle:hover{fill-opacity:.25;stroke-width:3}
+.zone-info{position:absolute;background:#1e293b;border:1px solid #334155;border-radius:12px;padding:14px;font-size:12px;pointer-events:none;z-index:10;min-width:200px;display:none}
+.zone-info.show{display:block}
+
+/* 데이터 파이프라인 */
+.pipeline-section{margin-bottom:32px}
+.pipeline{border:1px solid #1e293b;border-radius:14px;padding:20px;margin-bottom:16px;background:#111827;position:relative;overflow:hidden}
+.pipeline::before{content:'';position:absolute;top:0;left:0;right:0;height:3px}
+.pipeline-header{display:flex;align-items:center;gap:10px;margin-bottom:16px;cursor:pointer}
+.pipeline-icon{font-size:24px}
+.pipeline-name{font-size:15px;font-weight:700;flex:1}
+.pipeline-badge{font-size:10px;padding:3px 8px;border-radius:20px;font-weight:600}
+.pipeline-toggle{font-size:16px;color:#64748b;transition:transform .3s}
+.pipeline-toggle.open{transform:rotate(180deg)}
+
+.flow-row{display:flex;align-items:stretch;gap:0;margin-bottom:2px;flex-wrap:wrap}
+.flow-node{flex:1;min-width:120px;padding:10px 12px;border-radius:8px;border:1px solid rgba(255,255,255,.08);position:relative;display:flex;flex-direction:column;justify-content:center}
+.flow-node .fn-title{font-size:11px;font-weight:700;margin-bottom:2px}
+.flow-node .fn-desc{font-size:10px;color:#94a3b8}
+.flow-node .fn-tech{font-size:9px;color:#64748b;margin-top:3px;font-family:monospace}
+.flow-connector{display:flex;align-items:center;justify-content:center;color:#334155;font-size:14px;padding:0 4px;min-width:24px}
+.flow-connector.animated{animation:flowPulse 1.5s infinite}
+@keyframes flowPulse{0%,100%{color:#334155}50%{color:#38bdf8}}
+
+.pipe-sns::before{background:linear-gradient(90deg,#4ade80,#38bdf8)}
+.pipe-drone::before{background:linear-gradient(90deg,#f97316,#ef4444)}
+.pipe-mobility::before{background:linear-gradient(90deg,#a78bfa,#ec4899)}
+.pipe-verify::before{background:linear-gradient(90deg,#fbbf24,#4ade80)}
+.pipe-opendata::before{background:linear-gradient(90deg,#06b6d4,#3b82f6)}
+
+/* Kafka 토픽 */
+.kafka-section{margin-bottom:32px}
+.kafka-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(280px,1fr));gap:10px}
+.kafka-topic{background:#111827;border:1px solid #1e293b;border-radius:10px;padding:14px;transition:all .2s}
+.kafka-topic:hover{border-color:#334155;transform:translateY(-2px)}
+.kt-name{font-size:13px;font-weight:700;font-family:monospace;color:#38bdf8;margin-bottom:4px}
+.kt-desc{font-size:11px;color:#94a3b8}
+.kt-meta{display:flex;gap:8px;margin-top:6px}
+.kt-tag{font-size:10px;padding:2px 6px;border-radius:4px;background:rgba(255,255,255,.05);color:#64748b}
+
+/* DB 스키마 */
+.db-section{margin-bottom:32px}
+.db-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(250px,1fr));gap:10px}
+.db-table{background:#111827;border:1px solid #1e293b;border-radius:10px;padding:14px}
+.db-name{font-size:13px;font-weight:700;color:#4ade80;font-family:monospace;margin-bottom:6px;display:flex;align-items:center;gap:6px}
+.db-cols{font-size:11px;color:#94a3b8}
+.db-col{padding:2px 0;display:flex;gap:6px}
+.db-col-name{color:#e2e8f0;font-family:monospace;min-width:110px}
+.db-col-type{color:#64748b;font-family:monospace;font-size:10px}
+.db-idx{margin-top:6px;font-size:10px;color:#fbbf24;font-family:monospace}
+
+/* Redis 키 */
+.redis-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(300px,1fr));gap:10px}
+.redis-key{background:#111827;border:1px solid #1e293b;border-radius:10px;padding:14px}
+.rk-pattern{font-size:12px;font-weight:700;color:#ef4444;font-family:monospace}
+.rk-type{font-size:10px;color:#64748b;margin-top:2px}
+.rk-desc{font-size:11px;color:#94a3b8;margin-top:4px}
+
+.hidden{display:none}
+.tabs{display:flex;gap:8px;margin-bottom:20px;flex-wrap:wrap}
+.tab{padding:8px 16px;border-radius:8px;font-size:12px;font-weight:600;cursor:pointer;border:1px solid #334155;background:#1e293b;color:#94a3b8;transition:all .2s}
+.tab:hover{background:#334155}
+.tab.active{background:rgba(56,189,248,.15);border-color:#38bdf8;color:#38bdf8}
+</style>
+</head>
+<body>
+
+<div class="header">
+  <h1>군산시 기반 가상 시나리오 — 데이터 흐름</h1>
+  <p>군산대학교 → 은파유원지 · 새만금 · 금강하구둑 | 3단계 확장 시나리오</p>
+</div>
+
+<div class="main">
+
+  <!-- 3단계 시나리오 -->
+  <div class="section-title">📋 군산시 확장 시나리오 3단계</div>
+  <div class="phases">
+    <div class="phase p1 active" onclick="selectPhase(1)">
+      <span class="phase-num">PHASE 1</span>
+      <div class="phase-title">파일럿 — 군산대 캠퍼스</div>
+      <div class="phase-desc">학생·교직원 대상 SNS + 게미피케이션 검증</div>
+      <div class="phase-items">
+        <div class="phase-item">Docker Compose 인프라 구축</div>
+        <div class="phase-item">SNS + GIS 지오펜싱 기본 기능</div>
+        <div class="phase-item">YOLO v8 배포 + 인증 AI</div>
+        <div class="phase-item">React Native MVP + 지도 핀맵</div>
+        <div class="phase-item">부하 테스트 200명 목표</div>
+      </div>
+    </div>
+    <div class="phase p2" onclick="selectPhase(2)">
+      <span class="phase-num">PHASE 2</span>
+      <div class="phase-title">지역 확장 — 군산시</div>
+      <div class="phase-desc">은파유원지·새만금 지오펜싱 + 드론 시범 운용</div>
+      <div class="phase-items">
+        <div class="phase-item">드론 SDK 연동 (MCP 드론 서버)</div>
+        <div class="phase-item">은파·새만금·금강 지오펜싱 추가</div>
+        <div class="phase-item">지역주민 계정 오픈</div>
+        <div class="phase-item">동시 1,000명 확장</div>
+        <div class="phase-item">자율주행 모빌리티 연동 준비</div>
+      </div>
+    </div>
+    <div class="phase p3" onclick="selectPhase(3)">
+      <span class="phase-num">PHASE 3</span>
+      <div class="phase-title">공공데이터 생태계</div>
+      <div class="phase-desc">금강하구둑 자율주행 + 전북도 공공데이터 포털</div>
+      <div class="phase-items">
+        <div class="phase-item">금강하구둑 자율주행 모빌리티</div>
+        <div class="phase-item">전북도 공공데이터 포털 등재</div>
+        <div class="phase-item">AI-Hub 데이터셋 공개</div>
+        <div class="phase-item">Unity RL 시뮬레이터 고도화</div>
+        <div class="phase-item">AWS/NCP 클라우드 마이그레이션</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- 지오펜싱 지도 -->
+  <div class="map-section">
+    <div class="section-title">🗺️ 지오펜싱 구역 — WGS84 좌표계</div>
+    <div class="geo-map" id="geoMap">
+      <svg viewBox="0 0 1000 500">
+        <defs>
+          <radialGradient id="glow1"><stop offset="0%" stop-color="#4ade80" stop-opacity=".3"/><stop offset="100%" stop-color="#4ade80" stop-opacity="0"/></radialGradient>
+          <radialGradient id="glow2"><stop offset="0%" stop-color="#38bdf8" stop-opacity=".3"/><stop offset="100%" stop-color="#38bdf8" stop-opacity="0"/></radialGradient>
+          <radialGradient id="glow3"><stop offset="0%" stop-color="#f97316" stop-opacity=".25"/><stop offset="100%" stop-color="#f97316" stop-opacity="0"/></radialGradient>
+          <radialGradient id="glow4"><stop offset="0%" stop-color="#a78bfa" stop-opacity=".3"/><stop offset="100%" stop-color="#a78bfa" stop-opacity="0"/></radialGradient>
+        </defs>
+
+        <!-- 배경 그리드 -->
+        <g stroke="#1e293b" stroke-width=".5">
+          <line x1="0" y1="100" x2="1000" y2="100"/><line x1="0" y1="200" x2="1000" y2="200"/>
+          <line x1="0" y1="300" x2="1000" y2="300"/><line x1="0" y1="400" x2="1000" y2="400"/>
+          <line x1="200" y1="0" x2="200" y2="500"/><line x1="400" y1="0" x2="400" y2="500"/>
+          <line x1="600" y1="0" x2="600" y2="500"/><line x1="800" y1="0" x2="800" y2="500"/>
+        </g>
+
+        <!-- 연결선 (데이터 흐름) -->
+        <g stroke="#334155" stroke-width="1.5" stroke-dasharray="6,4" fill="none">
+          <path d="M 620,140 Q 500,200 380,180" id="conn1">
+            <animate attributeName="stroke-dashoffset" from="20" to="0" dur="2s" repeatCount="indefinite"/>
+          </path>
+          <path d="M 620,140 Q 550,300 350,380" id="conn2">
+            <animate attributeName="stroke-dashoffset" from="20" to="0" dur="3s" repeatCount="indefinite"/>
+          </path>
+          <path d="M 380,180 Q 350,280 350,380" id="conn3">
+            <animate attributeName="stroke-dashoffset" from="20" to="0" dur="2.5s" repeatCount="indefinite"/>
+          </path>
+        </g>
+
+        <!-- 군산대학교 -->
+        <circle cx="620" cy="140" r="80" fill="url(#glow1)"/>
+        <circle cx="620" cy="140" r="48" class="zone-circle" fill="#4ade80" stroke="#4ade80"
+                onmouseenter="showZone(event,'ku')" onmouseleave="hideZone()"/>
+        <text x="620" y="136" class="zone-label">군산대학교</text>
+        <text x="620" y="150" class="zone-sublabel">35.969°N 126.737°E</text>
+        <text x="620" y="164" class="zone-sublabel">반경 800m · ×1.0</text>
+        <text x="620" y="104" fill="#4ade80" font-size="9" text-anchor="middle" font-weight="700">Phase 1</text>
+
+        <!-- 은파유원지 -->
+        <circle cx="380" cy="180" r="90" fill="url(#glow2)"/>
+        <circle cx="380" cy="180" r="56" class="zone-circle" fill="#38bdf8" stroke="#38bdf8"
+                onmouseenter="showZone(event,'eunpa')" onmouseleave="hideZone()"/>
+        <text x="380" y="176" class="zone-label">은파유원지</text>
+        <text x="380" y="190" class="zone-sublabel">35.986°N 126.722°E</text>
+        <text x="380" y="204" class="zone-sublabel">반경 1.2km · ×1.5</text>
+        <text x="380" y="136" fill="#38bdf8" font-size="9" text-anchor="middle" font-weight="700">Phase 2</text>
+
+        <!-- 새만금 -->
+        <circle cx="350" cy="380" r="120" fill="url(#glow3)"/>
+        <circle cx="350" cy="380" r="72" class="zone-circle" fill="#f97316" stroke="#f97316"
+                onmouseenter="showZone(event,'smg')" onmouseleave="hideZone()"/>
+        <text x="350" y="374" class="zone-label">새만금</text>
+        <text x="350" y="388" class="zone-sublabel">35.800°N 126.600°E</text>
+        <text x="350" y="402" class="zone-sublabel">반경 10km · ×2.0</text>
+        <text x="350" y="320" fill="#f97316" font-size="9" text-anchor="middle" font-weight="700">Phase 2</text>
+
+        <!-- 금강하구둑 -->
+        <circle cx="730" cy="300" r="100" fill="url(#glow4)"/>
+        <circle cx="730" cy="300" r="60" class="zone-circle" fill="#a78bfa" stroke="#a78bfa"
+                onmouseenter="showZone(event,'geumgang')" onmouseleave="hideZone()"/>
+        <text x="730" y="296" class="zone-label">금강하구둑</text>
+        <text x="730" y="310" class="zone-sublabel">35.960°N 126.710°E</text>
+        <text x="730" y="324" class="zone-sublabel">반경 2km · ×1.8</text>
+        <text x="730" y="252" fill="#a78bfa" font-size="9" text-anchor="middle" font-weight="700">Phase 3</text>
+
+        <!-- 범례 -->
+        <g transform="translate(20,440)">
+          <rect x="0" y="0" width="200" height="48" rx="8" fill="rgba(30,41,59,.9)" stroke="#334155"/>
+          <circle cx="16" cy="14" r="5" fill="#4ade80"/><text x="28" y="18" fill="#94a3b8" font-size="10">도보 플로깅</text>
+          <circle cx="110" cy="14" r="5" fill="#38bdf8"/><text x="122" y="18" fill="#94a3b8" font-size="10">수변·드론</text>
+          <circle cx="16" cy="34" r="5" fill="#f97316"/><text x="28" y="38" fill="#94a3b8" font-size="10">광역 순찰</text>
+          <circle cx="110" cy="34" r="5" fill="#a78bfa"/><text x="122" y="38" fill="#94a3b8" font-size="10">자율주행</text>
+        </g>
+
+        <!-- 아이콘 -->
+        <text x="620" y="115" font-size="20" text-anchor="middle">🎓</text>
+        <text x="380" y="148" font-size="20" text-anchor="middle">💧</text>
+        <text x="350" y="348" font-size="20" text-anchor="middle">🌊</text>
+        <text x="730" y="268" font-size="20" text-anchor="middle">🌿</text>
+      </svg>
+
+      <div class="zone-info" id="zoneInfo"></div>
+    </div>
+  </div>
+
+  <!-- 탭 네비게이션 -->
+  <div class="tabs">
+    <div class="tab active" onclick="switchTab('pipelines')">데이터 파이프라인</div>
+    <div class="tab" onclick="switchTab('kafka')">Kafka 토픽</div>
+    <div class="tab" onclick="switchTab('db')">DB 스키마</div>
+    <div class="tab" onclick="switchTab('redis')">Redis 키 설계</div>
+  </div>
+
+  <!-- 데이터 파이프라인 -->
+  <div id="tab-pipelines">
+    <div class="pipeline pipe-sns">
+      <div class="pipeline-header" onclick="togglePipeline(this)">
+        <span class="pipeline-icon">📱</span>
+        <span class="pipeline-name">SNS 제보 → AI 탐지 → 게미피케이션</span>
+        <span class="pipeline-badge" style="background:rgba(74,222,128,.15);color:#4ade80">실시간</span>
+        <span class="pipeline-toggle open">▼</span>
+      </div>
+      <div class="flow-row">
+        <div class="flow-node" style="background:rgba(236,72,153,.1);border-color:rgba(236,72,153,.2)">
+          <div class="fn-title">📱 플로거 SNS 업로드</div>
+          <div class="fn-desc">이미지 + GPS 좌표</div>
+        </div>
+        <div class="flow-connector animated">→</div>
+        <div class="flow-node" style="background:rgba(56,189,248,.1);border-color:rgba(56,189,248,.2)">
+          <div class="fn-title">POST /api/v1/posts</div>
+          <div class="fn-desc">SNS Service (:8001)</div>
+          <div class="fn-tech">image + lat/lon</div>
+        </div>
+        <div class="flow-connector animated">→</div>
+        <div class="flow-node" style="background:rgba(6,182,212,.1);border-color:rgba(6,182,212,.2)">
+          <div class="fn-title">📦 MinIO + Kafka</div>
+          <div class="fn-desc">S3 저장 + 이벤트 발행</div>
+          <div class="fn-tech">plogging.report.created</div>
+        </div>
+        <div class="flow-connector animated">→</div>
+        <div class="flow-node" style="background:rgba(167,139,250,.1);border-color:rgba(167,139,250,.2)">
+          <div class="fn-title">🎯 YOLO v8 추론</div>
+          <div class="fn-desc">TorchServe GPU</div>
+          <div class="fn-tech">confidence ≥ 0.5</div>
+        </div>
+        <div class="flow-connector animated">→</div>
+        <div class="flow-node" style="background:rgba(74,222,128,.1);border-color:rgba(74,222,128,.2)">
+          <div class="fn-title">🗺️ PostGIS 저장</div>
+          <div class="fn-desc">ST_Within 구역 판정</div>
+          <div class="fn-tech">trash_reports</div>
+        </div>
+        <div class="flow-connector animated">→</div>
+        <div class="flow-node" style="background:rgba(251,191,36,.1);border-color:rgba(251,191,36,.2)">
+          <div class="fn-title">🎮 XP 적립</div>
+          <div class="fn-desc">MCP award_points</div>
+          <div class="fn-tech">+20 XP × zone_bonus</div>
+        </div>
+        <div class="flow-connector animated">→</div>
+        <div class="flow-node" style="background:rgba(74,222,128,.1);border-color:rgba(74,222,128,.2)">
+          <div class="fn-title">🔌 WebSocket Push</div>
+          <div class="fn-desc">핀맵 + 알림</div>
+          <div class="fn-tech">ws:zone:{id}</div>
+        </div>
+      </div>
+    </div>
+
+    <div class="pipeline pipe-drone">
+      <div class="pipeline-header" onclick="togglePipeline(this)">
+        <span class="pipeline-icon">🚁</span>
+        <span class="pipeline-name">드론 영상 → 탐지 → 경로 최적화</span>
+        <span class="pipeline-badge" style="background:rgba(249,115,22,.15);color:#f97316">배치</span>
+        <span class="pipeline-toggle open">▼</span>
+      </div>
+      <div class="flow-row">
+        <div class="flow-node" style="background:rgba(236,72,153,.1);border-color:rgba(236,72,153,.2)">
+          <div class="fn-title">🚁 RTSP 스트림</div>
+          <div class="fn-desc">드론 SDK 영상</div>
+        </div>
+        <div class="flow-connector animated">→</div>
+        <div class="flow-node" style="background:rgba(251,191,36,.1);border-color:rgba(251,191,36,.2)">
+          <div class="fn-title">DroneAgent</div>
+          <div class="fn-desc">1fps 프레임 버퍼</div>
+          <div class="fn-tech">OpenCV VideoCapture</div>
+        </div>
+        <div class="flow-connector animated">→</div>
+        <div class="flow-node" style="background:rgba(167,139,250,.1);border-color:rgba(167,139,250,.2)">
+          <div class="fn-title">🎯 YOLO 배치 추론</div>
+          <div class="fn-desc">GPU A6000 8GB</div>
+          <div class="fn-tech">pixel → GPS 보정</div>
+        </div>
+        <div class="flow-connector animated">→</div>
+        <div class="flow-node" style="background:rgba(6,182,212,.1);border-color:rgba(6,182,212,.2)">
+          <div class="fn-title">Kafka 발행</div>
+          <div class="fn-desc">plogging.raw.drone</div>
+          <div class="fn-tech">GeoJSON 형태</div>
+        </div>
+        <div class="flow-connector animated">→</div>
+        <div class="flow-node" style="background:rgba(167,139,250,.1);border-color:rgba(167,139,250,.2)">
+          <div class="fn-title">🛤️ RL Agent</div>
+          <div class="fn-desc">PPO/SAC 최적 경로</div>
+          <div class="fn-tech">Stable-Baselines3</div>
+        </div>
+        <div class="flow-connector animated">→</div>
+        <div class="flow-node" style="background:rgba(251,191,36,.1);border-color:rgba(251,191,36,.2)">
+          <div class="fn-title">🚗 모빌리티 디스패치</div>
+          <div class="fn-desc">MCP optimize_route</div>
+        </div>
+      </div>
+    </div>
+
+    <div class="pipeline pipe-verify">
+      <div class="pipeline-header" onclick="togglePipeline(this)">
+        <span class="pipeline-icon">✅</span>
+        <span class="pipeline-name">청소 인증 → 포인트 → 공공데이터</span>
+        <span class="pipeline-badge" style="background:rgba(251,191,36,.15);color:#fbbf24">트리거</span>
+        <span class="pipeline-toggle open">▼</span>
+      </div>
+      <div class="flow-row">
+        <div class="flow-node" style="background:rgba(236,72,153,.1);border-color:rgba(236,72,153,.2)">
+          <div class="fn-title">📷 청소 후 사진</div>
+          <div class="fn-desc">before/after 이미지</div>
+        </div>
+        <div class="flow-connector animated">→</div>
+        <div class="flow-node" style="background:rgba(167,139,250,.1);border-color:rgba(167,139,250,.2)">
+          <div class="fn-title">✅ VerificationAgent</div>
+          <div class="fn-desc">SSIM + ResNet 비교</div>
+          <div class="fn-tech">확률 ≥ 0.85</div>
+        </div>
+        <div class="flow-connector animated">→</div>
+        <div class="flow-node" style="background:rgba(74,222,128,.1);border-color:rgba(74,222,128,.2)">
+          <div class="fn-title">인증 성공</div>
+          <div class="fn-desc">status → completed</div>
+        </div>
+        <div class="flow-connector animated">→</div>
+        <div class="flow-node" style="background:rgba(251,191,36,.1);border-color:rgba(251,191,36,.2)">
+          <div class="fn-title">🎮 XP +50~100</div>
+          <div class="fn-desc">퀘스트 완료 체크</div>
+          <div class="fn-tech">award_points (MCP)</div>
+        </div>
+        <div class="flow-connector animated">→</div>
+        <div class="flow-node" style="background:rgba(6,182,212,.1);border-color:rgba(6,182,212,.2)">
+          <div class="fn-title">📊 GeoJSON 변환</div>
+          <div class="fn-desc">공공데이터 API 갱신</div>
+        </div>
+        <div class="flow-connector animated">→</div>
+        <div class="flow-node" style="background:rgba(56,189,248,.1);border-color:rgba(56,189,248,.2)">
+          <div class="fn-title">🔍 ES 인덱싱</div>
+          <div class="fn-desc">검색·집계 업데이트</div>
+        </div>
+      </div>
+    </div>
+
+    <div class="pipeline pipe-opendata">
+      <div class="pipeline-header" onclick="togglePipeline(this)">
+        <span class="pipeline-icon">📤</span>
+        <span class="pipeline-name">공공데이터 AI-Ready 배포</span>
+        <span class="pipeline-badge" style="background:rgba(6,182,212,.15);color:#06b6d4">일배치</span>
+        <span class="pipeline-toggle open">▼</span>
+      </div>
+      <div class="flow-row">
+        <div class="flow-node" style="background:rgba(251,191,36,.1);border-color:rgba(251,191,36,.2)">
+          <div class="fn-title">⏰ SchedulerAgent</div>
+          <div class="fn-desc">매일 01:00 트리거</div>
+        </div>
+        <div class="flow-connector animated">→</div>
+        <div class="flow-node" style="background:rgba(6,182,212,.1);border-color:rgba(6,182,212,.2)">
+          <div class="fn-title">DataAgent</div>
+          <div class="fn-desc">Kafka: opendata.export</div>
+        </div>
+        <div class="flow-connector animated">→</div>
+        <div class="flow-node" style="background:rgba(74,222,128,.1);border-color:rgba(74,222,128,.2)">
+          <div class="fn-title">GeoJSON 생성</div>
+          <div class="fn-desc">CC-BY-4.0 라이선스</div>
+          <div class="fn-tech">K-익명성 적용</div>
+        </div>
+        <div class="flow-connector animated">→</div>
+        <div class="flow-node" style="background:rgba(167,139,250,.1);border-color:rgba(167,139,250,.2)">
+          <div class="fn-title">COCO 생성</div>
+          <div class="fn-desc">이미지 데이터셋</div>
+          <div class="fn-tech">conf ≥ 0.7 필터</div>
+        </div>
+        <div class="flow-connector animated">→</div>
+        <div class="flow-node" style="background:rgba(6,182,212,.1);border-color:rgba(6,182,212,.2)">
+          <div class="fn-title">📦 MinIO 업로드</div>
+          <div class="fn-desc">plogging-opendata</div>
+        </div>
+        <div class="flow-connector animated">→</div>
+        <div class="flow-node" style="background:rgba(56,189,248,.1);border-color:rgba(56,189,248,.2)">
+          <div class="fn-title">🏛️ 전북도 포털</div>
+          <div class="fn-desc">AI-Hub 연계</div>
+          <div class="fn-tech">DCAT 메타데이터</div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Kafka 토픽 -->
+  <div id="tab-kafka" class="hidden">
+    <div class="section-title">📨 Kafka 토픽 설계</div>
+    <div class="kafka-grid">
+      <div class="kafka-topic">
+        <div class="kt-name">plogging.report.created</div>
+        <div class="kt-desc">사용자 SNS 제보 생성 이벤트. AI 서비스가 소비하여 YOLO 탐지 수행.</div>
+        <div class="kt-meta"><span class="kt-tag">partitions: 8</span><span class="kt-tag">Producer: SNS Service</span><span class="kt-tag">Consumer: AI Service</span></div>
+      </div>
+      <div class="kafka-topic">
+        <div class="kt-name">plogging.ai.detected</div>
+        <div class="kt-desc">AI 탐지 완료 이벤트. ES 동기화 + GIS 핀맵 갱신 트리거.</div>
+        <div class="kt-meta"><span class="kt-tag">partitions: 8</span><span class="kt-tag">Producer: AI Service</span><span class="kt-tag">Consumer: ES Sync</span></div>
+      </div>
+      <div class="kafka-topic">
+        <div class="kt-name">plogging.mission.completed</div>
+        <div class="kt-desc">청소 인증 완료 이벤트. QuestAgent가 퀘스트 진행도 업데이트.</div>
+        <div class="kt-meta"><span class="kt-tag">partitions: 4</span><span class="kt-tag">Producer: MCP Server</span><span class="kt-tag">Consumer: Quest Agent</span></div>
+      </div>
+      <div class="kafka-topic">
+        <div class="kt-name">drone.stream.uploaded</div>
+        <div class="kt-desc">드론 영상 업로드 이벤트. AI 서비스가 프레임 배치 탐지 수행.</div>
+        <div class="kt-meta"><span class="kt-tag">partitions: 4</span><span class="kt-tag">Producer: Drone Agent</span><span class="kt-tag">Consumer: AI Service</span></div>
+      </div>
+      <div class="kafka-topic">
+        <div class="kt-name">mobility.route.completed</div>
+        <div class="kt-desc">모빌리티 수거 경로 완료. 포인트 지급 + 통계 갱신 트리거.</div>
+        <div class="kt-meta"><span class="kt-tag">partitions: 4</span><span class="kt-tag">Producer: Mobility Agent</span><span class="kt-tag">Consumer: Game Service</span></div>
+      </div>
+      <div class="kafka-topic">
+        <div class="kt-name">user.points.updated</div>
+        <div class="kt-desc">포인트 갱신 이벤트. Redis 랭킹 + WebSocket 브로드캐스트 트리거.</div>
+        <div class="kt-meta"><span class="kt-tag">partitions: 8</span><span class="kt-tag">Producer: MCP Server</span><span class="kt-tag">Consumer: Game Service</span></div>
+      </div>
+      <div class="kafka-topic">
+        <div class="kt-name">opendata.export.triggered</div>
+        <div class="kt-desc">공공데이터 내보내기 트리거. DataAgent가 GeoJSON/COCO 생성.</div>
+        <div class="kt-meta"><span class="kt-tag">partitions: 1</span><span class="kt-tag">Producer: Scheduler</span><span class="kt-tag">Consumer: Data Agent</span></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- DB 스키마 -->
+  <div id="tab-db" class="hidden">
+    <div class="section-title">🐘 PostgreSQL + PostGIS 스키마</div>
+    <div class="db-grid">
+      <div class="db-table">
+        <div class="db-name">👤 users</div>
+        <div class="db-cols">
+          <div class="db-col"><span class="db-col-name">id</span><span class="db-col-type">UUID PK</span></div>
+          <div class="db-col"><span class="db-col-name">username</span><span class="db-col-type">VARCHAR(50) UNIQUE</span></div>
+          <div class="db-col"><span class="db-col-name">email</span><span class="db-col-type">VARCHAR(255) UNIQUE</span></div>
+          <div class="db-col"><span class="db-col-name">role</span><span class="db-col-type">user|admin|drone_op</span></div>
+        </div>
+      </div>
+      <div class="db-table">
+        <div class="db-name">🗺️ geofence_zones</div>
+        <div class="db-cols">
+          <div class="db-col"><span class="db-col-name">zone_key</span><span class="db-col-type">VARCHAR(50) UNIQUE</span></div>
+          <div class="db-col"><span class="db-col-name">geom</span><span class="db-col-type">GEOMETRY(POLYGON,4326)</span></div>
+          <div class="db-col"><span class="db-col-name">bonus_multiplier</span><span class="db-col-type">DECIMAL(4,2)</span></div>
+        </div>
+        <div class="db-idx">GIST INDEX on geom</div>
+      </div>
+      <div class="db-table">
+        <div class="db-name">🗑️ trash_reports</div>
+        <div class="db-cols">
+          <div class="db-col"><span class="db-col-name">location</span><span class="db-col-type">GEOMETRY(POINT,4326)</span></div>
+          <div class="db-col"><span class="db-col-name">trash_type</span><span class="db-col-type">VARCHAR(50)</span></div>
+          <div class="db-col"><span class="db-col-name">severity</span><span class="db-col-type">low|mid|high|boss</span></div>
+          <div class="db-col"><span class="db-col-name">source</span><span class="db-col-type">sns|drone|mobility</span></div>
+          <div class="db-col"><span class="db-col-name">ai_confidence</span><span class="db-col-type">DECIMAL(5,4)</span></div>
+        </div>
+        <div class="db-idx">GIST INDEX on location</div>
+      </div>
+      <div class="db-table">
+        <div class="db-name">✅ cleanups</div>
+        <div class="db-cols">
+          <div class="db-col"><span class="db-col-name">verify_score</span><span class="db-col-type">DECIMAL(5,4)</span></div>
+          <div class="db-col"><span class="db-col-name">cleaner_type</span><span class="db-col-type">human|drone|mobility</span></div>
+          <div class="db-col"><span class="db-col-name">points_awarded</span><span class="db-col-type">INTEGER</span></div>
+        </div>
+      </div>
+      <div class="db-table">
+        <div class="db-name">💰 point_ledger</div>
+        <div class="db-cols">
+          <div class="db-col"><span class="db-col-name">delta</span><span class="db-col-type">INTEGER NOT NULL</span></div>
+          <div class="db-col"><span class="db-col-name">reason</span><span class="db-col-type">VARCHAR(100)</span></div>
+        </div>
+        <div class="db-idx">UNIQUE(user_id, ref_id, reason)</div>
+      </div>
+      <div class="db-table">
+        <div class="db-name">⚔️ quest_definitions</div>
+        <div class="db-cols">
+          <div class="db-col"><span class="db-col-name">quest_type</span><span class="db-col-type">weekly|zone|raid</span></div>
+          <div class="db-col"><span class="db-col-name">target_count</span><span class="db-col-type">INTEGER</span></div>
+          <div class="db-col"><span class="db-col-name">reward_xp</span><span class="db-col-type">INTEGER</span></div>
+        </div>
+      </div>
+      <div class="db-table">
+        <div class="db-name">📸 posts</div>
+        <div class="db-cols">
+          <div class="db-col"><span class="db-col-name">hashtags</span><span class="db-col-type">TEXT[] (GIN index)</span></div>
+          <div class="db-col"><span class="db-col-name">location</span><span class="db-col-type">GEOMETRY(POINT,4326)</span></div>
+          <div class="db-col"><span class="db-col-name">like_count</span><span class="db-col-type">INTEGER</span></div>
+        </div>
+      </div>
+      <div class="db-table">
+        <div class="db-name">🚁 drone_events</div>
+        <div class="db-cols">
+          <div class="db-col"><span class="db-col-name">drone_id</span><span class="db-col-type">VARCHAR(50)</span></div>
+          <div class="db-col"><span class="db-col-name">detected_count</span><span class="db-col-type">INTEGER</span></div>
+          <div class="db-col"><span class="db-col-name">payload</span><span class="db-col-type">JSONB</span></div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Redis 키 설계 -->
+  <div id="tab-redis" class="hidden">
+    <div class="section-title">⚡ Redis 키 설계</div>
+    <div class="redis-grid">
+      <div class="redis-key">
+        <div class="rk-pattern">ZADD ranking:global {xp} {user_id}</div>
+        <div class="rk-type">Sorted Set — 글로벌 랭킹</div>
+        <div class="rk-desc">전체 사용자 XP 랭킹. O(log N) 실시간 갱신.</div>
+      </div>
+      <div class="redis-key">
+        <div class="rk-pattern">ZADD ranking:zone:{zone_key} {xp} {user_id}</div>
+        <div class="rk-type">Sorted Set — 구역 랭킹</div>
+        <div class="rk-desc">구역별 사용자 랭킹.</div>
+      </div>
+      <div class="redis-key">
+        <div class="rk-pattern">HSET session:{user_id} token {jwt}</div>
+        <div class="rk-type">Hash — TTL 30분</div>
+        <div class="rk-desc">세션 관리. EXPIRE 1800초.</div>
+      </div>
+      <div class="redis-key">
+        <div class="rk-pattern">SET cache:leaderboard {json}</div>
+        <div class="rk-type">String — TTL 10초</div>
+        <div class="rk-desc">랭킹 API 캐시. 1,000 TPS 캐시 적중률 99%.</div>
+      </div>
+      <div class="redis-key">
+        <div class="rk-pattern">GEOADD drones:live {lon} {lat} {drone_id}</div>
+        <div class="rk-type">GEO — TTL 30초</div>
+        <div class="rk-desc">드론 실시간 위치.</div>
+      </div>
+      <div class="redis-key">
+        <div class="rk-pattern">SET dedup:report:{lat3}:{lon3} 1</div>
+        <div class="rk-type">String — TTL 1시간</div>
+        <div class="rk-desc">50m 이내 중복 제보 방지.</div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+const zoneData = {
+  ku: {name:'군산대학교',coords:'35.9693°N, 126.7369°E',radius:'800m',bonus:'×1.0',phase:'Phase 1',feature:'도보 플로깅 기점',color:'#4ade80'},
+  eunpa: {name:'은파유원지',coords:'35.9861°N, 126.7222°E',radius:'1.2km',bonus:'×1.5',phase:'Phase 2',feature:'수변·드론 허용 구역',color:'#38bdf8'},
+  smg: {name:'새만금',coords:'35.8000°N, 126.6000°E',radius:'10km',bonus:'×2.0',phase:'Phase 2',feature:'군집드론 광역 순찰',color:'#f97316'},
+  geumgang: {name:'금강하구둑',coords:'35.9600°N, 126.7100°E',radius:'2km',bonus:'×1.8',phase:'Phase 3',feature:'자율주행 모빌리티',color:'#a78bfa'},
+};
+
+function showZone(e, key) {
+  const d = zoneData[key], info = document.getElementById('zoneInfo');
+  info.innerHTML = `
+    <div style="font-weight:700;font-size:14px;color:${d.color};margin-bottom:6px">${d.name}</div>
+    <div style="margin-bottom:4px">📍 ${d.coords}</div>
+    <div style="margin-bottom:4px">📏 반경: ${d.radius} | 배율: ${d.bonus}</div>
+    <div style="margin-bottom:4px">📋 ${d.phase}</div>
+    <div style="color:#64748b">${d.feature}</div>
+  `;
+  const rect = document.getElementById('geoMap').getBoundingClientRect();
+  info.style.left = (e.clientX - rect.left + 15) + 'px';
+  info.style.top = (e.clientY - rect.top - 30) + 'px';
+  info.classList.add('show');
+}
+function hideZone() { document.getElementById('zoneInfo').classList.remove('show'); }
+
+function selectPhase(n) {
+  document.querySelectorAll('.phase').forEach((p,i) => p.classList.toggle('active', i===n-1));
+}
+
+function togglePipeline(el) {
+  const content = el.nextElementSibling;
+  const toggle = el.querySelector('.pipeline-toggle');
+  content.classList.toggle('hidden');
+  toggle.classList.toggle('open');
+}
+
+function switchTab(tab) {
+  document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+  document.querySelectorAll('[id^="tab-"]').forEach(t => t.classList.add('hidden'));
+  event.target.classList.add('active');
+  document.getElementById('tab-' + tab).classList.remove('hidden');
+}
+</script>
+</body>
+</html>

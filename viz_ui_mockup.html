@@ -1,0 +1,649 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>메타 플로깅 플랫폼 — 인터랙티브 UI 목업</title>
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+body{font-family:'Segoe UI',system-ui,sans-serif;background:#0a0e1a;color:#e2e8f0;overflow-x:hidden}
+.header{text-align:center;padding:24px 20px 14px;background:linear-gradient(135deg,#0f172a,#1a1f3a);border-bottom:1px solid #1e293b}
+.header h1{font-size:24px;font-weight:800;background:linear-gradient(135deg,#4ade80,#a78bfa);-webkit-background-clip:text;-webkit-text-fill-color:transparent}
+.header p{color:#94a3b8;font-size:13px;margin-top:4px}
+.main{max-width:1400px;margin:0 auto;padding:24px 20px}
+
+/* 뷰 전환 탭 */
+.view-tabs{display:flex;gap:8px;margin-bottom:24px;flex-wrap:wrap;justify-content:center}
+.vtab{padding:10px 20px;border-radius:10px;font-size:13px;font-weight:700;cursor:pointer;border:1px solid #334155;background:#1e293b;color:#94a3b8;transition:all .2s}
+.vtab:hover{background:#334155}
+.vtab.active{background:linear-gradient(135deg,rgba(74,222,128,.15),rgba(56,189,248,.15));border-color:#4ade80;color:#4ade80}
+
+.view{display:none}
+.view.active{display:block}
+
+/* 모바일 목업 프레임 */
+.phone-frame{width:375px;height:812px;border-radius:40px;border:3px solid #334155;background:#0f172a;margin:0 auto;position:relative;overflow:hidden;box-shadow:0 20px 60px rgba(0,0,0,.5)}
+.phone-notch{position:absolute;top:0;left:50%;transform:translateX(-50%);width:160px;height:30px;background:#0f172a;border-radius:0 0 20px 20px;z-index:20}
+.phone-status{display:flex;justify-content:space-between;padding:8px 24px 0;font-size:11px;color:#94a3b8;position:relative;z-index:10}
+.phone-content{height:calc(100% - 70px);overflow-y:auto;position:relative}
+.phone-nav{position:absolute;bottom:0;left:0;right:0;height:70px;background:rgba(15,23,42,.95);backdrop-filter:blur(10px);border-top:1px solid #1e293b;display:flex;justify-content:space-around;align-items:center;z-index:20}
+.nav-item{display:flex;flex-direction:column;align-items:center;gap:2px;cursor:pointer;padding:8px 12px;border-radius:12px;transition:all .2s}
+.nav-item:hover{background:rgba(255,255,255,.05)}
+.nav-item.active .nav-icon{color:#4ade80}
+.nav-item.active .nav-label{color:#4ade80}
+.nav-icon{font-size:20px;color:#64748b}
+.nav-label{font-size:9px;color:#64748b;font-weight:600}
+
+/* 모바일 화면: 지도 */
+.map-screen{height:100%}
+.mock-map{width:100%;height:400px;background:linear-gradient(180deg,#1a2744 0%,#0f1f35 100%);position:relative;overflow:hidden}
+.mock-map-grid{position:absolute;inset:0;opacity:.1;background-image:linear-gradient(#38bdf8 1px,transparent 1px),linear-gradient(90deg,#38bdf8 1px,transparent 1px);background-size:40px 40px}
+.map-pin{position:absolute;cursor:pointer;transition:transform .2s;z-index:5}
+.map-pin:hover{transform:scale(1.3);z-index:10}
+.pin-dot{width:28px;height:28px;border-radius:14px;display:flex;align-items:center;justify-content:center;font-size:12px;border:2px solid #fff;box-shadow:0 2px 8px rgba(0,0,0,.4)}
+.zone-chip-bar{position:absolute;top:50px;left:10px;right:10px;display:flex;gap:6px;z-index:10;flex-wrap:wrap}
+.zone-chip{background:rgba(0,0,0,.7);backdrop-filter:blur(8px);padding:4px 10px;border-radius:20px;font-size:10px;font-weight:600;color:#e2e8f0;display:flex;align-items:center;gap:4px}
+.zone-chip-dot{width:6px;height:6px;border-radius:3px}
+.report-btn{position:absolute;bottom:80px;left:50%;transform:translateX(-50%);background:linear-gradient(135deg,#059669,#10b981);padding:12px 28px;border-radius:28px;font-size:14px;font-weight:700;color:#fff;cursor:pointer;box-shadow:0 4px 16px rgba(5,150,105,.4);z-index:10;border:none;display:flex;align-items:center;gap:6px}
+.report-btn:hover{transform:translateX(-50%) scale(1.05)}
+.user-loc{position:absolute;width:14px;height:14px;border-radius:50%;background:#3b82f6;border:3px solid rgba(59,130,246,.3);box-shadow:0 0 20px rgba(59,130,246,.5);z-index:6}
+.user-loc::after{content:'';position:absolute;inset:-8px;border-radius:50%;border:2px solid rgba(59,130,246,.2);animation:locPulse 2s infinite}
+@keyframes locPulse{0%{transform:scale(1);opacity:1}100%{transform:scale(2.5);opacity:0}}
+
+/* 모바일: 피드 */
+.feed-screen{padding:50px 12px 12px}
+.feed-header{font-size:18px;font-weight:800;padding:8px 0 12px;display:flex;justify-content:space-between;align-items:center}
+.feed-card{background:#1e293b;border-radius:14px;margin-bottom:12px;overflow:hidden;border:1px solid #334155}
+.fc-header{display:flex;align-items:center;gap:8px;padding:10px 12px}
+.fc-avatar{width:32px;height:32px;border-radius:50%;background:linear-gradient(135deg,#4ade80,#38bdf8);display:flex;align-items:center;justify-content:center;font-size:14px}
+.fc-user{font-size:12px;font-weight:700;flex:1}
+.fc-time{font-size:10px;color:#64748b}
+.fc-image{width:100%;height:180px;background:linear-gradient(135deg,#1a2535,#0f172a);display:flex;align-items:center;justify-content:center;font-size:48px}
+.fc-body{padding:10px 12px}
+.fc-text{font-size:12px;line-height:1.5;margin-bottom:6px}
+.fc-tags{display:flex;gap:4px;flex-wrap:wrap;margin-bottom:8px}
+.fc-tag{font-size:10px;color:#38bdf8;background:rgba(56,189,248,.1);padding:2px 6px;border-radius:4px}
+.fc-actions{display:flex;gap:16px;font-size:12px;color:#94a3b8}
+.fc-action{cursor:pointer;display:flex;align-items:center;gap:4px}
+.fc-action:hover{color:#e2e8f0}
+.fc-badge{display:inline-flex;align-items:center;gap:4px;background:rgba(167,139,250,.15);color:#a78bfa;padding:2px 8px;border-radius:4px;font-size:10px;font-weight:600}
+.fc-sev{padding:2px 6px;border-radius:4px;font-size:10px;font-weight:600}
+
+/* 모바일: 프로필 */
+.profile-screen{padding:50px 12px 12px}
+.profile-card{background:linear-gradient(135deg,#0f2b1d,#1a2535);border-radius:16px;padding:20px;border:1px solid #334155;text-align:center;margin-bottom:16px}
+.profile-avatar{width:64px;height:64px;border-radius:50%;background:linear-gradient(135deg,#4ade80,#38bdf8);margin:0 auto 10px;display:flex;align-items:center;justify-content:center;font-size:28px}
+.profile-name{font-size:16px;font-weight:700}
+.profile-title{font-size:12px;color:#4ade80;margin-top:2px}
+.profile-stats{display:grid;grid-template-columns:repeat(3,1fr);gap:12px;margin-top:16px}
+.ps-item{text-align:center}
+.ps-val{font-size:18px;font-weight:800;color:#38bdf8}
+.ps-label{font-size:10px;color:#64748b;margin-top:2px}
+.xp-bar{margin-top:16px}
+.xp-info{display:flex;justify-content:space-between;font-size:11px;color:#94a3b8;margin-bottom:4px}
+.xp-track{height:8px;background:#0f172a;border-radius:4px;overflow:hidden}
+.xp-fill{height:100%;background:linear-gradient(90deg,#4ade80,#38bdf8);border-radius:4px;transition:width 1s}
+.badge-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:8px;margin-bottom:16px}
+.badge-item{background:#1e293b;border-radius:10px;padding:8px;text-align:center;border:1px solid #334155;cursor:pointer;transition:all .2s}
+.badge-item:hover{border-color:#4ade80;transform:scale(1.05)}
+.badge-icon{font-size:20px;margin-bottom:4px}
+.badge-name{font-size:9px;color:#94a3b8}
+.quest-card{background:#1e293b;border-radius:12px;padding:12px;margin-bottom:8px;border:1px solid #334155}
+.qc-header{display:flex;align-items:center;gap:8px;margin-bottom:6px}
+.qc-title{font-size:13px;font-weight:700;flex:1}
+.qc-xp{font-size:11px;color:#fbbf24;font-weight:700}
+.qc-progress{height:6px;background:#0f172a;border-radius:3px;overflow:hidden;margin-top:6px}
+.qc-fill{height:100%;border-radius:3px}
+.qc-info{display:flex;justify-content:space-between;font-size:10px;color:#64748b;margin-top:4px}
+
+/* 관리자 대시보드 */
+.admin-dash{padding:24px}
+.admin-header{font-size:20px;font-weight:800;margin-bottom:20px;display:flex;align-items:center;gap:8px}
+.admin-stats{display:grid;grid-template-columns:repeat(4,1fr);gap:12px;margin-bottom:24px}
+.as-card{background:#1e293b;border-radius:12px;padding:16px;text-align:center;border:1px solid #334155;cursor:pointer;transition:all .2s}
+.as-card:hover{transform:translateY(-3px);box-shadow:0 8px 24px rgba(0,0,0,.3)}
+.as-val{font-size:28px;font-weight:800}
+.as-label{font-size:11px;color:#64748b;margin-top:4px}
+.as-delta{font-size:10px;margin-top:4px;font-weight:600}
+.admin-grid{display:grid;grid-template-columns:1fr 1fr;gap:16px}
+.admin-panel{background:#1e293b;border-radius:14px;padding:18px;border:1px solid #334155}
+.ap-title{font-size:14px;font-weight:700;margin-bottom:14px}
+.zone-bar{margin-bottom:10px}
+.zb-header{display:flex;justify-content:space-between;font-size:12px;margin-bottom:4px}
+.zb-name{font-weight:600}
+.zb-count{color:#64748b}
+.zb-track{height:6px;background:#0f172a;border-radius:3px;overflow:hidden}
+.zb-fill{height:100%;border-radius:3px}
+.rank-row{display:flex;align-items:center;gap:8px;padding:6px 0;font-size:13px;border-bottom:1px solid rgba(255,255,255,.04)}
+.rank-pos{min-width:28px;text-align:center}
+.rank-name{flex:1}
+.rank-xp{font-weight:700;color:#fbbf24}
+.opendata-table{width:100%;border-collapse:collapse;font-size:12px;margin-top:8px}
+.opendata-table th{text-align:left;padding:6px 8px;color:#64748b;border-bottom:1px solid #334155}
+.opendata-table td{padding:6px 8px;border-bottom:1px solid rgba(255,255,255,.04)}
+.od-badge{padding:2px 7px;border-radius:4px;font-size:10px;font-weight:600}
+
+/* 알림 토스트 */
+.toast-container{position:fixed;top:20px;right:20px;z-index:1000;display:flex;flex-direction:column;gap:8px}
+.toast{background:#1e293b;border:1px solid #334155;border-radius:12px;padding:12px 16px;min-width:300px;display:flex;align-items:center;gap:10px;animation:toastIn .3s;box-shadow:0 8px 24px rgba(0,0,0,.4)}
+.toast-icon{font-size:20px}
+.toast-body{flex:1}
+.toast-title{font-size:12px;font-weight:700;margin-bottom:2px}
+.toast-desc{font-size:11px;color:#94a3b8}
+@keyframes toastIn{from{transform:translateX(100px);opacity:0}to{transform:translateX(0);opacity:1}}
+
+/* 실시간 시뮬레이션 제어 */
+.sim-bar{display:flex;align-items:center;gap:12px;padding:12px 20px;background:#111827;border-radius:12px;margin-bottom:20px;border:1px solid #1e293b}
+.sim-dot{width:10px;height:10px;border-radius:50%;background:#ef4444}
+.sim-dot.running{background:#4ade80;animation:simPulse 1s infinite}
+@keyframes simPulse{0%,100%{opacity:1}50%{opacity:.5}}
+.sim-label{font-size:13px;font-weight:600;flex:1}
+.sim-btn{padding:6px 16px;border-radius:8px;border:none;font-size:12px;font-weight:600;cursor:pointer;transition:all .2s}
+.sim-btn.start{background:#059669;color:#fff}.sim-btn.start:hover{background:#10b981}
+.sim-btn.stop{background:#dc2626;color:#fff}.sim-btn.stop:hover{background:#ef4444}
+.sim-counter{font-size:12px;color:#64748b;font-family:monospace}
+</style>
+</head>
+<body>
+
+<div class="header">
+  <h1>메타 플로깅 플랫폼 — 인터랙티브 UI 목업</h1>
+  <p>모바일 앱 · SNS 피드 · 게미피케이션 프로필 · 관리자 대시보드</p>
+</div>
+
+<div class="main">
+  <!-- 실시간 시뮬레이션 바 -->
+  <div class="sim-bar">
+    <div class="sim-dot" id="simDot"></div>
+    <div class="sim-label">실시간 이벤트 시뮬레이션</div>
+    <span class="sim-counter" id="simCounter">이벤트: 0</span>
+    <button class="sim-btn start" id="simBtn" onclick="toggleSim()">시작</button>
+  </div>
+
+  <!-- 뷰 전환 -->
+  <div class="view-tabs">
+    <div class="vtab active" onclick="switchView('map')">🗺️ 지도 (핀맵)</div>
+    <div class="vtab" onclick="switchView('feed')">📸 SNS 피드</div>
+    <div class="vtab" onclick="switchView('profile')">👤 프로필</div>
+    <div class="vtab" onclick="switchView('admin')">🖥️ 관리자</div>
+  </div>
+
+  <!-- 모바일: 지도 -->
+  <div class="view active" id="view-map">
+    <div class="phone-frame">
+      <div class="phone-notch"></div>
+      <div class="phone-status"><span>9:41</span><span>meta-plogging</span><span>5G 📶</span></div>
+      <div class="phone-content">
+        <div class="map-screen">
+          <div class="mock-map">
+            <div class="mock-map-grid"></div>
+            <div class="zone-chip-bar">
+              <div class="zone-chip"><div class="zone-chip-dot" style="background:#4ade80"></div>군산대 12건</div>
+              <div class="zone-chip"><div class="zone-chip-dot" style="background:#38bdf8"></div>은파 8건</div>
+              <div class="zone-chip"><div class="zone-chip-dot" style="background:#f97316"></div>새만금 15건</div>
+              <div class="zone-chip"><div class="zone-chip-dot" style="background:#a78bfa"></div>금강 6건</div>
+            </div>
+
+            <!-- 사용자 위치 -->
+            <div class="user-loc" style="top:190px;left:200px"></div>
+
+            <!-- 핀들 -->
+            <div class="map-pin" style="top:80px;left:120px" onclick="showPinToast('plastic','low')">
+              <div class="pin-dot" style="background:#22c55e">🗑️</div>
+            </div>
+            <div class="map-pin" style="top:130px;left:250px" onclick="showPinToast('food','mid')">
+              <div class="pin-dot" style="background:#f97316">🗑️</div>
+            </div>
+            <div class="map-pin" style="top:100px;left:180px" onclick="showPinToast('general','high')">
+              <div class="pin-dot" style="background:#ef4444">🗑️</div>
+            </div>
+            <div class="map-pin" style="top:200px;left:300px" onclick="showPinToast('large','boss')">
+              <div class="pin-dot" style="background:#7c3aed">💀</div>
+            </div>
+            <div class="map-pin" style="top:160px;left:100px">
+              <div class="pin-dot" style="background:#22c55e">✅</div>
+            </div>
+            <div class="map-pin" style="top:250px;left:220px" onclick="showPinToast('plastic','mid')">
+              <div class="pin-dot" style="background:#f97316">🗑️</div>
+            </div>
+            <div class="map-pin" style="top:300px;left:150px" onclick="showPinToast('food','low')">
+              <div class="pin-dot" style="background:#22c55e">🗑️</div>
+            </div>
+            <div class="map-pin" style="top:280px;left:280px" onclick="showPinToast('general','high')">
+              <div class="pin-dot" style="background:#ef4444">🗑️</div>
+            </div>
+
+            <!-- 드론 아이콘 -->
+            <div class="map-pin" style="top:60px;left:280px;animation:float 3s infinite">
+              <div class="pin-dot" style="background:rgba(56,189,248,.8);border-color:#38bdf8;font-size:16px">🚁</div>
+            </div>
+            <style>@keyframes float{0%,100%{transform:translateY(0)}50%{transform:translateY(-8px)}}</style>
+
+            <button class="report-btn" onclick="showReportToast()">🌿 플로깅 제보</button>
+          </div>
+
+          <!-- 구역 진입 알림 -->
+          <div style="padding:12px">
+            <div style="background:linear-gradient(135deg,rgba(5,150,105,.15),rgba(16,185,129,.1));border:1px solid rgba(16,185,129,.3);border-radius:12px;padding:12px;display:flex;align-items:center;gap:10px">
+              <span style="font-size:24px">🌿</span>
+              <div>
+                <div style="font-size:13px;font-weight:700;color:#4ade80">군산대학교 구역 진입!</div>
+                <div style="font-size:11px;color:#94a3b8">보너스: ×1.0 | 활성 퀘스트 3개</div>
+              </div>
+            </div>
+
+            <div style="margin-top:12px;background:#1e293b;border-radius:12px;padding:12px;border:1px solid #334155">
+              <div style="font-size:12px;font-weight:700;margin-bottom:8px">현재 구역 퀘스트</div>
+              <div style="display:flex;flex-direction:column;gap:6px">
+                <div style="display:flex;align-items:center;gap:8px;font-size:11px">
+                  <span>🌱</span>
+                  <span style="flex:1">주간 플로깅 3회</span>
+                  <span style="color:#fbbf24;font-weight:700">2/3</span>
+                </div>
+                <div style="display:flex;align-items:center;gap:8px;font-size:11px">
+                  <span>📍</span>
+                  <span style="flex:1">5건 제보 달성</span>
+                  <span style="color:#fbbf24;font-weight:700">3/5</span>
+                </div>
+                <div style="display:flex;align-items:center;gap:8px;font-size:11px">
+                  <span>💀</span>
+                  <span style="flex:1">보스 레이드 참여</span>
+                  <span style="color:#ef4444;font-weight:700">NEW!</span>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+      <div class="phone-nav">
+        <div class="nav-item active"><div class="nav-icon">🗺️</div><div class="nav-label">지도</div></div>
+        <div class="nav-item" onclick="switchView('feed')"><div class="nav-icon">📸</div><div class="nav-label">피드</div></div>
+        <div class="nav-item"><div class="nav-icon">🏆</div><div class="nav-label">랭킹</div></div>
+        <div class="nav-item" onclick="switchView('profile')"><div class="nav-icon">👤</div><div class="nav-label">프로필</div></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- 모바일: SNS 피드 -->
+  <div class="view" id="view-feed">
+    <div class="phone-frame">
+      <div class="phone-notch"></div>
+      <div class="phone-status"><span>9:41</span><span>피드</span><span>5G 📶</span></div>
+      <div class="phone-content">
+        <div class="feed-screen">
+          <div class="feed-header">
+            <span>🌿 플로깅 피드</span>
+            <span style="font-size:12px;color:#38bdf8;cursor:pointer">🔍</span>
+          </div>
+
+          <div class="feed-card">
+            <div class="fc-header">
+              <div class="fc-avatar">👩</div>
+              <div>
+                <div class="fc-user">이수빈 <span class="fc-badge">Lv.8 환경 수호자</span></div>
+                <div class="fc-time">군산대학교 · 2분 전</div>
+              </div>
+            </div>
+            <div class="fc-image" style="background:linear-gradient(135deg,#1a3a2a,#0f2b1d)">🗑️📸</div>
+            <div class="fc-body">
+              <div class="fc-text">학교 정문 앞 플라스틱 무단투기 발견! 바로 제보했습니다 🌿</div>
+              <div style="display:flex;align-items:center;gap:6px;margin-bottom:8px">
+                <span class="fc-sev" style="background:rgba(249,115,22,.15);color:#f97316">mid</span>
+                <span class="fc-sev" style="background:rgba(56,189,248,.15);color:#38bdf8">plastic</span>
+                <span style="font-size:10px;color:#4ade80;font-weight:600;margin-left:auto">+20 XP</span>
+              </div>
+              <div class="fc-tags">
+                <span class="fc-tag">#군산대</span><span class="fc-tag">#플로깅</span><span class="fc-tag">#환경보호</span>
+              </div>
+              <div class="fc-actions">
+                <span class="fc-action" onclick="this.innerHTML='❤️ 43'">🤍 42</span>
+                <span class="fc-action">💬 5</span>
+                <span class="fc-action">🔗 공유</span>
+              </div>
+            </div>
+          </div>
+
+          <div class="feed-card">
+            <div class="fc-header">
+              <div class="fc-avatar">👨</div>
+              <div>
+                <div class="fc-user">박민준 <span class="fc-badge" style="background:rgba(251,191,36,.15);color:#fbbf24">Lv.10 마스터</span></div>
+                <div class="fc-time">은파유원지 · 15분 전</div>
+              </div>
+            </div>
+            <div class="fc-image" style="background:linear-gradient(135deg,#1a2535,#0f1f35)">🌊🧹</div>
+            <div class="fc-body">
+              <div class="fc-text">은파유원지 청소 완료! 비포/애프터 보세요 ✨ 보스급 대형 폐기물 처리!</div>
+              <div style="display:flex;align-items:center;gap:6px;margin-bottom:8px">
+                <span class="fc-sev" style="background:rgba(124,58,237,.15);color:#a78bfa">boss</span>
+                <span class="fc-sev" style="background:rgba(56,189,248,.15);color:#38bdf8">large</span>
+                <span style="font-size:10px;color:#4ade80;font-weight:600;margin-left:auto">+150 XP (×1.5)</span>
+              </div>
+              <div class="fc-tags">
+                <span class="fc-tag">#은파유원지</span><span class="fc-tag">#보스레이드</span><span class="fc-tag">#클린업</span>
+              </div>
+              <div class="fc-actions">
+                <span class="fc-action">❤️ 128</span>
+                <span class="fc-action">💬 23</span>
+                <span class="fc-action">🔗 공유</span>
+              </div>
+            </div>
+          </div>
+
+          <div class="feed-card">
+            <div class="fc-header">
+              <div class="fc-avatar">🚁</div>
+              <div>
+                <div class="fc-user">드론 AI <span class="fc-badge" style="background:rgba(6,182,212,.15);color:#06b6d4">자동 탐지</span></div>
+                <div class="fc-time">새만금 · 32분 전</div>
+              </div>
+            </div>
+            <div class="fc-image" style="background:linear-gradient(135deg,#2a2510,#1a1f2e)">🚁🎯</div>
+            <div class="fc-body">
+              <div class="fc-text">[AI 자동탐지] 새만금 해안가 3건의 쓰레기 집중 구역 발견. 수거 모빌리티 디스패치 완료.</div>
+              <div style="display:flex;align-items:center;gap:6px;margin-bottom:8px">
+                <span class="fc-sev" style="background:rgba(239,68,68,.15);color:#ef4444">high</span>
+                <span style="font-size:10px;color:#94a3b8">YOLO v8 confidence: 0.92</span>
+              </div>
+              <div class="fc-tags">
+                <span class="fc-tag">#드론탐지</span><span class="fc-tag">#새만금</span><span class="fc-tag">#AI</span>
+              </div>
+              <div class="fc-actions">
+                <span class="fc-action">🤍 67</span>
+                <span class="fc-action">💬 12</span>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+      <div class="phone-nav">
+        <div class="nav-item" onclick="switchView('map')"><div class="nav-icon">🗺️</div><div class="nav-label">지도</div></div>
+        <div class="nav-item active"><div class="nav-icon">📸</div><div class="nav-label">피드</div></div>
+        <div class="nav-item"><div class="nav-icon">🏆</div><div class="nav-label">랭킹</div></div>
+        <div class="nav-item" onclick="switchView('profile')"><div class="nav-icon">👤</div><div class="nav-label">프로필</div></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- 모바일: 프로필 -->
+  <div class="view" id="view-profile">
+    <div class="phone-frame">
+      <div class="phone-notch"></div>
+      <div class="phone-status"><span>9:41</span><span>프로필</span><span>5G 📶</span></div>
+      <div class="phone-content">
+        <div class="profile-screen">
+          <div class="profile-card">
+            <div class="profile-avatar">👩</div>
+            <div class="profile-name">이수빈</div>
+            <div class="profile-title">Lv.8 환경 수호자</div>
+            <div class="profile-stats">
+              <div class="ps-item"><div class="ps-val" id="profileXP">3,240</div><div class="ps-label">총 XP</div></div>
+              <div class="ps-item"><div class="ps-val">8</div><div class="ps-label">랭킹</div></div>
+              <div class="ps-item"><div class="ps-val">47</div><div class="ps-label">제보</div></div>
+            </div>
+            <div class="xp-bar">
+              <div class="xp-info"><span>Lv.8 환경 수호자</span><span>3,240 / 4,000</span></div>
+              <div class="xp-track"><div class="xp-fill" id="xpFill" style="width:81%"></div></div>
+              <div style="font-size:10px;color:#64748b;text-align:right;margin-top:2px">Lv.9 군산 레인저까지 760 XP</div>
+            </div>
+          </div>
+
+          <div style="font-size:13px;font-weight:700;margin-bottom:10px">🏅 획득 배지</div>
+          <div class="badge-grid">
+            <div class="badge-item"><div class="badge-icon">🌱</div><div class="badge-name">첫 발걸음</div></div>
+            <div class="badge-item"><div class="badge-icon">🔍</div><div class="badge-name">탐정 Lv.1</div></div>
+            <div class="badge-item"><div class="badge-icon">🔎</div><div class="badge-name">탐정 Lv.2</div></div>
+            <div class="badge-item"><div class="badge-icon">🧹</div><div class="badge-name">첫 청소</div></div>
+            <div class="badge-item"><div class="badge-icon">✨</div><div class="badge-name">청소왕</div></div>
+            <div class="badge-item"><div class="badge-icon">💧</div><div class="badge-name">은파 수호자</div></div>
+            <div class="badge-item"><div class="badge-icon">📅</div><div class="badge-name">4주 연속</div></div>
+            <div class="badge-item" style="opacity:.3;border-style:dashed"><div class="badge-icon">💀</div><div class="badge-name">보스 킬러</div></div>
+          </div>
+
+          <div style="font-size:13px;font-weight:700;margin-bottom:10px">⚔️ 활성 퀘스트</div>
+          <div class="quest-card">
+            <div class="qc-header"><span>🌱</span><span class="qc-title">주간 플로깅 3회</span><span class="qc-xp">+150 XP</span></div>
+            <div class="qc-progress"><div class="qc-fill" style="width:67%;background:linear-gradient(90deg,#4ade80,#38bdf8)"></div></div>
+            <div class="qc-info"><span>진행: 2/3</span><span>이번 주 마감</span></div>
+          </div>
+          <div class="quest-card">
+            <div class="qc-header"><span>💧</span><span class="qc-title">은파 수호자 5건</span><span class="qc-xp">+200 XP</span></div>
+            <div class="qc-progress"><div class="qc-fill" style="width:80%;background:linear-gradient(90deg,#38bdf8,#a78bfa)"></div></div>
+            <div class="qc-info"><span>진행: 4/5</span><span>은파유원지</span></div>
+          </div>
+          <div class="quest-card" style="border-color:rgba(124,58,237,.3)">
+            <div class="qc-header"><span>💀</span><span class="qc-title">보스 레이드: 새만금</span><span class="qc-xp">+400 XP</span></div>
+            <div class="qc-progress"><div class="qc-fill" style="width:33%;background:linear-gradient(90deg,#a78bfa,#ec4899)"></div></div>
+            <div class="qc-info"><span>3인 팀 1/3</span><span style="color:#ef4444">🔥 참여자 모집 중</span></div>
+          </div>
+
+          <div style="font-size:13px;font-weight:700;margin:16px 0 10px">📊 최근 포인트 이력</div>
+          <div style="font-size:11px">
+            <div style="display:flex;justify-content:space-between;padding:4px 0;border-bottom:1px solid rgba(255,255,255,.04)">
+              <span>청소 인증 (은파유원지)</span><span style="color:#4ade80;font-weight:700">+75 XP</span>
+            </div>
+            <div style="display:flex;justify-content:space-between;padding:4px 0;border-bottom:1px solid rgba(255,255,255,.04)">
+              <span>쓰레기 제보 (군산대)</span><span style="color:#4ade80;font-weight:700">+20 XP</span>
+            </div>
+            <div style="display:flex;justify-content:space-between;padding:4px 0;border-bottom:1px solid rgba(255,255,255,.04)">
+              <span>주간 퀘스트 완료</span><span style="color:#4ade80;font-weight:700">+150 XP</span>
+            </div>
+            <div style="display:flex;justify-content:space-between;padding:4px 0">
+              <span>좋아요 받음 (×5)</span><span style="color:#4ade80;font-weight:700">+10 XP</span>
+            </div>
+          </div>
+        </div>
+      </div>
+      <div class="phone-nav">
+        <div class="nav-item" onclick="switchView('map')"><div class="nav-icon">🗺️</div><div class="nav-label">지도</div></div>
+        <div class="nav-item" onclick="switchView('feed')"><div class="nav-icon">📸</div><div class="nav-label">피드</div></div>
+        <div class="nav-item"><div class="nav-icon">🏆</div><div class="nav-label">랭킹</div></div>
+        <div class="nav-item active"><div class="nav-icon">👤</div><div class="nav-label">프로필</div></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- 관리자 대시보드 -->
+  <div class="view" id="view-admin">
+    <div class="admin-dash">
+      <div class="admin-header">🌿 메타 플로깅 관리자 — 군산시</div>
+
+      <div class="admin-stats">
+        <div class="as-card">
+          <div class="as-val" style="color:#38bdf8" id="adReports">1,247</div>
+          <div class="as-label">총 제보</div>
+          <div class="as-delta" style="color:#4ade80">+23 오늘</div>
+        </div>
+        <div class="as-card">
+          <div class="as-val" style="color:#4ade80" id="adCompleted">891</div>
+          <div class="as-label">처리 완료</div>
+          <div class="as-delta" style="color:#4ade80">+12 오늘</div>
+        </div>
+        <div class="as-card">
+          <div class="as-val" style="color:#f97316" id="adPending">356</div>
+          <div class="as-label">대기중</div>
+          <div class="as-delta" style="color:#ef4444">+11 오늘</div>
+        </div>
+        <div class="as-card">
+          <div class="as-val" style="color:#a78bfa" id="adDrones">3</div>
+          <div class="as-label">활성 드론</div>
+          <div class="as-delta" style="color:#94a3b8">은파·새만금·금강</div>
+        </div>
+      </div>
+
+      <div class="admin-grid">
+        <!-- 구역별 현황 -->
+        <div class="admin-panel">
+          <div class="ap-title">구역별 현황</div>
+          <div class="zone-bar">
+            <div class="zb-header"><span class="zb-name">🎓 군산대학교</span><span class="zb-count">12건 대기 | 89건 완료</span></div>
+            <div class="zb-track"><div class="zb-fill" style="width:88%;background:#4ade80"></div></div>
+          </div>
+          <div class="zone-bar">
+            <div class="zb-header"><span class="zb-name">💧 은파유원지</span><span class="zb-count">8건 대기 | 145건 완료</span></div>
+            <div class="zb-track"><div class="zb-fill" style="width:95%;background:#38bdf8"></div></div>
+          </div>
+          <div class="zone-bar">
+            <div class="zb-header"><span class="zb-name">🌊 새만금</span><span class="zb-count">15건 대기 | 203건 완료</span></div>
+            <div class="zb-track"><div class="zb-fill" style="width:93%;background:#f97316"></div></div>
+          </div>
+          <div class="zone-bar">
+            <div class="zb-header"><span class="zb-name">🌿 금강하구둑</span><span class="zb-count">6건 대기 | 78건 완료</span></div>
+            <div class="zb-track"><div class="zb-fill" style="width:93%;background:#a78bfa"></div></div>
+          </div>
+
+          <div style="margin-top:16px;padding:12px;background:#0f172a;border-radius:10px">
+            <div style="font-size:12px;font-weight:700;margin-bottom:8px">실시간 AI 탐지 로그</div>
+            <div id="aiLog" style="font-size:10px;font-family:monospace;color:#94a3b8;max-height:100px;overflow-y:auto">
+              <div style="color:#4ade80">[09:41:23] YOLO: 군산대 plastic (0.91) → ai_verified</div>
+              <div style="color:#38bdf8">[09:40:15] YOLO: 은파 food (0.87) → ai_verified</div>
+              <div style="color:#f97316">[09:39:02] YOLO: 새만금 large (0.95) → boss detected!</div>
+              <div style="color:#a78bfa">[09:38:44] RL: 금강 route optimized (5 waypoints)</div>
+            </div>
+          </div>
+        </div>
+
+        <!-- TOP 10 랭킹 -->
+        <div class="admin-panel">
+          <div class="ap-title">실시간 TOP 10</div>
+          <div class="rank-row"><span class="rank-pos">🥇</span><span class="rank-name">박민준</span><span class="rank-xp">🌿 5,240</span></div>
+          <div class="rank-row"><span class="rank-pos">🥈</span><span class="rank-name">김하늘</span><span class="rank-xp">🌿 4,890</span></div>
+          <div class="rank-row"><span class="rank-pos">🥉</span><span class="rank-name">정우성</span><span class="rank-xp">🌿 4,320</span></div>
+          <div class="rank-row"><span class="rank-pos">4.</span><span class="rank-name">이서연</span><span class="rank-xp">🌿 3,980</span></div>
+          <div class="rank-row"><span class="rank-pos">5.</span><span class="rank-name">최예진</span><span class="rank-xp">🌿 3,650</span></div>
+          <div class="rank-row"><span class="rank-pos">6.</span><span class="rank-name">한지훈</span><span class="rank-xp">🌿 3,420</span></div>
+          <div class="rank-row"><span class="rank-pos">7.</span><span class="rank-name">송민서</span><span class="rank-xp">🌿 3,310</span></div>
+          <div class="rank-row"><span class="rank-pos">8.</span><span class="rank-name">이수빈</span><span class="rank-xp">🌿 3,240</span></div>
+          <div class="rank-row"><span class="rank-pos">9.</span><span class="rank-name">윤지호</span><span class="rank-xp">🌿 2,980</span></div>
+          <div class="rank-row"><span class="rank-pos">10.</span><span class="rank-name">장서윤</span><span class="rank-xp">🌿 2,750</span></div>
+        </div>
+
+        <!-- 공공데이터 -->
+        <div class="admin-panel" style="grid-column:1/-1">
+          <div class="ap-title">AI-Ready 공공데이터 배포 이력</div>
+          <table class="opendata-table">
+            <thead><tr><th>타입</th><th>파일명</th><th>레코드</th><th>라이선스</th><th>생성일</th></tr></thead>
+            <tbody>
+              <tr>
+                <td><span class="od-badge" style="background:rgba(56,189,248,.15);color:#38bdf8">GeoJSON</span></td>
+                <td style="font-family:monospace;color:#94a3b8">20260316_010000.geojson</td>
+                <td>8,432</td><td>CC-BY-4.0</td><td>2026-03-16</td>
+              </tr>
+              <tr>
+                <td><span class="od-badge" style="background:rgba(167,139,250,.15);color:#a78bfa">COCO</span></td>
+                <td style="font-family:monospace;color:#94a3b8">20260316_coco.json</td>
+                <td>3,217</td><td>CC-BY-4.0</td><td>2026-03-16</td>
+              </tr>
+              <tr>
+                <td><span class="od-badge" style="background:rgba(56,189,248,.15);color:#38bdf8">GeoJSON</span></td>
+                <td style="font-family:monospace;color:#94a3b8">20260315_010000.geojson</td>
+                <td>8,109</td><td>CC-BY-4.0</td><td>2026-03-15</td>
+              </tr>
+              <tr>
+                <td><span class="od-badge" style="background:rgba(74,222,128,.15);color:#4ade80">DCAT</span></td>
+                <td style="font-family:monospace;color:#94a3b8">metadata_v1.json</td>
+                <td>—</td><td>CC-BY-4.0</td><td>2026-03-14</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- 토스트 컨테이너 -->
+<div class="toast-container" id="toasts"></div>
+
+<script>
+function switchView(id) {
+  document.querySelectorAll('.view').forEach(v => v.classList.remove('active'));
+  document.querySelectorAll('.vtab').forEach(t => t.classList.remove('active'));
+  document.getElementById('view-' + id).classList.add('active');
+  event?.target?.classList?.add('active');
+  // Highlight correct tab
+  document.querySelectorAll('.vtab').forEach(t => {
+    if (t.textContent.includes({map:'지도',feed:'피드',profile:'프로필',admin:'관리자'}[id] || ''))
+      t.classList.add('active');
+  });
+}
+
+// 토스트
+function addToast(icon, title, desc, duration=4000) {
+  const c = document.getElementById('toasts');
+  const t = document.createElement('div');
+  t.className = 'toast';
+  t.innerHTML = `<span class="toast-icon">${icon}</span><div class="toast-body"><div class="toast-title">${title}</div><div class="toast-desc">${desc}</div></div>`;
+  c.appendChild(t);
+  setTimeout(() => { t.style.opacity = '0'; t.style.transform = 'translateX(100px)'; t.style.transition = 'all .3s'; setTimeout(() => t.remove(), 300); }, duration);
+}
+
+function showPinToast(type, sev) {
+  const sevName = {low:'일반',mid:'보통',high:'위험',boss:'보스'}[sev] || sev;
+  const typeName = {plastic:'플라스틱',food:'음식물',general:'일반',large:'대형'}[type] || type;
+  addToast('📍', `${typeName} 쓰레기 (${sevName})`, '탭하여 청소 인증 시작');
+}
+
+function showReportToast() {
+  addToast('🌿', '제보 접수 완료!', '+20 XP 적립 | YOLO AI 분석 중...', 5000);
+}
+
+// 실시간 시뮬레이션
+let simInterval = null;
+let eventCount = 0;
+const events = [
+  {icon:'📍',title:'새 핀 등록',desc:'군산대학교 — plastic (mid)'},
+  {icon:'🎯',title:'AI 탐지 완료',desc:'YOLO v8 confidence: 0.93 — ai_verified'},
+  {icon:'✅',title:'청소 인증 성공',desc:'은파유원지 — verify_score: 0.91 — +75 XP'},
+  {icon:'🏅',title:'배지 획득!',desc:'이수빈 — 🧹 청소왕 (rare)'},
+  {icon:'⚔️',title:'퀘스트 완료',desc:'주간 플로깅 3회 — +150 XP'},
+  {icon:'💀',title:'보스 출현!',desc:'새만금 해안가 — 대형 폐기물 발견'},
+  {icon:'🚁',title:'드론 탐지',desc:'금강하구둑 3건 집중 구역 발견'},
+  {icon:'🛤️',title:'경로 최적화',desc:'RL Agent: 5개 웨이포인트 생성'},
+  {icon:'📤',title:'공공데이터 갱신',desc:'GeoJSON 8,432건 → MinIO 업로드'},
+  {icon:'🏆',title:'랭킹 변동',desc:'박민준 → 1위 유지 (5,240 XP)'},
+];
+
+function toggleSim() {
+  const btn = document.getElementById('simBtn');
+  const dot = document.getElementById('simDot');
+  if (simInterval) {
+    clearInterval(simInterval);
+    simInterval = null;
+    btn.textContent = '시작';
+    btn.className = 'sim-btn start';
+    dot.classList.remove('running');
+  } else {
+    btn.textContent = '중지';
+    btn.className = 'sim-btn stop';
+    dot.classList.add('running');
+    simInterval = setInterval(() => {
+      const e = events[Math.floor(Math.random() * events.length)];
+      addToast(e.icon, e.title, e.desc, 5000);
+      eventCount++;
+      document.getElementById('simCounter').textContent = `이벤트: ${eventCount}`;
+
+      // 관리자 카운터 업데이트
+      const el = document.getElementById('adReports');
+      if (el) el.textContent = (parseInt(el.textContent.replace(/,/g,'')) + 1).toLocaleString();
+
+      // AI 로그 추가
+      const log = document.getElementById('aiLog');
+      if (log) {
+        const now = new Date();
+        const ts = `${String(now.getHours()).padStart(2,'0')}:${String(now.getMinutes()).padStart(2,'0')}:${String(now.getSeconds()).padStart(2,'0')}`;
+        const colors = ['#4ade80','#38bdf8','#f97316','#a78bfa'];
+        const zones = ['군산대','은파','새만금','금강'];
+        const zi = Math.floor(Math.random()*4);
+        const div = document.createElement('div');
+        div.style.color = colors[zi];
+        div.textContent = `[${ts}] ${e.title}: ${zones[zi]} — ${e.desc.slice(0,40)}`;
+        log.prepend(div);
+        if (log.children.length > 20) log.lastChild.remove();
+      }
+    }, 3000);
+  }
+}
+</script>
+</body>
+</html>

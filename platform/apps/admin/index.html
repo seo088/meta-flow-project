@@ -1,0 +1,362 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>메타 SW 플로깅 — 관리자 대시보드</title>
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+body{font-family:'Segoe UI',system-ui,sans-serif;background:#0f172a;color:#e2e8f0;min-height:100vh}
+.header{background:#1e293b;padding:16px 24px;display:flex;align-items:center;justify-content:space-between;border-bottom:1px solid #334155}
+.header h1{font-size:18px;background:linear-gradient(135deg,#4ade80,#38bdf8);-webkit-background-clip:text;-webkit-text-fill-color:transparent}
+.header .status{display:flex;gap:12px;font-size:12px}
+.status-dot{width:8px;height:8px;border-radius:50%;display:inline-block;margin-right:4px}
+.status-dot.on{background:#4ade80}.status-dot.off{background:#ef4444}
+.main{display:grid;grid-template-columns:240px 1fr;min-height:calc(100vh - 57px)}
+.sidebar{background:#1e293b;border-right:1px solid #334155;padding:16px 0}
+.nav-item{padding:10px 20px;font-size:13px;cursor:pointer;display:flex;align-items:center;gap:8px;color:#94a3b8;transition:all .2s}
+.nav-item:hover,.nav-item.active{background:rgba(56,189,248,.1);color:#38bdf8;border-right:2px solid #38bdf8}
+.content{padding:24px;overflow-y:auto}
+.cards{display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:16px;margin-bottom:24px}
+.card{background:#1e293b;border:1px solid #334155;border-radius:12px;padding:16px}
+.card-val{font-size:28px;font-weight:800;color:#4ade80}.card-label{font-size:12px;color:#64748b;margin-top:4px}
+.panel{background:#1e293b;border:1px solid #334155;border-radius:12px;padding:20px;margin-bottom:16px}
+.panel-title{font-size:14px;font-weight:700;margin-bottom:12px;display:flex;align-items:center;gap:8px}
+table{width:100%;border-collapse:collapse;font-size:12px}
+th{text-align:left;padding:8px;color:#64748b;border-bottom:1px solid #334155}
+td{padding:8px;border-bottom:1px solid rgba(255,255,255,.04)}
+.badge{font-size:10px;padding:2px 8px;border-radius:10px;font-weight:600}
+.badge-pending{background:rgba(251,191,36,.15);color:#fbbf24}
+.badge-completed{background:rgba(74,222,128,.15);color:#4ade80}
+.badge-boss{background:rgba(239,68,68,.15);color:#ef4444}
+.btn{padding:6px 14px;border-radius:8px;border:1px solid #334155;background:#334155;color:#e2e8f0;cursor:pointer;font-size:12px;transition:all .2s}
+.btn:hover{background:#475569}
+.btn-primary{background:rgba(56,189,248,.2);border-color:#38bdf8;color:#38bdf8}
+.log-area{background:#0a0e1a;border-radius:8px;padding:12px;font-family:monospace;font-size:11px;max-height:300px;overflow-y:auto;line-height:1.6}
+.log-entry{padding:2px 0;border-bottom:1px solid rgba(255,255,255,.03)}
+.log-time{color:#64748b}.log-info{color:#38bdf8}.log-warn{color:#fbbf24}.log-err{color:#ef4444}
+#refresh-indicator{animation:pulse 2s infinite}
+@keyframes pulse{0%,100%{opacity:.6}50%{opacity:1}}
+</style>
+</head>
+<body>
+<div class="header">
+  <h1>🌿 메타 SW 플로깅 관리자 대시보드</h1>
+  <div class="status">
+    <span id="refresh-indicator">🔄 자동갱신</span>
+    <span><span class="status-dot" id="api-status"></span>API</span>
+    <span><span class="status-dot" id="ws-status"></span>WS</span>
+    <span><span class="status-dot" id="mcp-status"></span>MCP</span>
+  </div>
+</div>
+
+<div class="main">
+  <div class="sidebar">
+    <div class="nav-item active" onclick="showPanel('overview')">📊 Overview</div>
+    <div class="nav-item" onclick="showPanel('zones')">🗺️ 구역 현황</div>
+    <div class="nav-item" onclick="showPanel('reports')">📍 제보 관리</div>
+    <div class="nav-item" onclick="showPanel('ranking')">🏆 랭킹</div>
+    <div class="nav-item" onclick="showPanel('services')">⚙️ 서비스 상태</div>
+    <div class="nav-item" onclick="showPanel('drone')">🚁 드론/모빌리티</div>
+    <div class="nav-item" onclick="showPanel('opendata')">📤 공공데이터</div>
+    <div class="nav-item" onclick="showPanel('logs')">📋 실시간 로그</div>
+  </div>
+
+  <div class="content" id="content">
+    <!-- Overview -->
+    <div id="panel-overview">
+      <div class="cards">
+        <div class="card"><div class="card-val" id="stat-users">-</div><div class="card-label">전체 사용자</div></div>
+        <div class="card"><div class="card-val" id="stat-reports">-</div><div class="card-label">누적 제보</div></div>
+        <div class="card"><div class="card-val" id="stat-pending">-</div><div class="card-label">미처리</div></div>
+        <div class="card"><div class="card-val" id="stat-completed">-</div><div class="card-label">완료</div></div>
+        <div class="card"><div class="card-val" id="stat-boss">-</div><div class="card-label">보스급</div></div>
+      </div>
+      <div class="panel">
+        <div class="panel-title">🗺️ 구역별 현황</div>
+        <table>
+          <thead><tr><th>구역</th><th>미처리</th><th>완료</th><th>보스</th><th>보너스</th></tr></thead>
+          <tbody id="zone-table"></tbody>
+        </table>
+      </div>
+    </div>
+
+    <!-- Services -->
+    <div id="panel-services" style="display:none">
+      <div class="panel">
+        <div class="panel-title">⚙️ 서비스 헬스체크</div>
+        <table>
+          <thead><tr><th>서비스</th><th>포트</th><th>상태</th><th>응답시간</th></tr></thead>
+          <tbody id="service-table"></tbody>
+        </table>
+        <button class="btn btn-primary" onclick="checkAllHealth()" style="margin-top:12px">🔄 전체 체크</button>
+      </div>
+    </div>
+
+    <!-- Ranking -->
+    <div id="panel-ranking" style="display:none">
+      <div class="panel">
+        <div class="panel-title">🏆 글로벌 랭킹 Top 20</div>
+        <table>
+          <thead><tr><th>#</th><th>이름</th><th>XP</th><th>레벨</th></tr></thead>
+          <tbody id="ranking-table"></tbody>
+        </table>
+      </div>
+    </div>
+
+    <!-- Logs -->
+    <div id="panel-logs" style="display:none">
+      <div class="panel">
+        <div class="panel-title">📋 실시간 이벤트 로그</div>
+        <div class="log-area" id="log-area"></div>
+      </div>
+    </div>
+
+    <!-- OpenData -->
+    <div id="panel-opendata" style="display:none">
+      <div class="panel">
+        <div class="panel-title">📤 공공데이터 내보내기</div>
+        <div style="display:flex;gap:8px;margin-bottom:16px">
+          <button class="btn btn-primary" onclick="triggerExport('geojson')">GeoJSON 내보내기</button>
+          <button class="btn btn-primary" onclick="triggerExport('coco')">COCO 내보내기</button>
+          <button class="btn btn-primary" onclick="triggerExport('all')">전체 내보내기</button>
+        </div>
+        <table>
+          <thead><tr><th>형식</th><th>파일</th><th>레코드수</th><th>생성일</th></tr></thead>
+          <tbody id="opendata-table"></tbody>
+        </table>
+      </div>
+    </div>
+
+    <div id="panel-zones" style="display:none">
+      <div class="panel">
+        <div class="panel-title">🗺️ 구역 상세</div>
+        <table><thead><tr><th>구역</th><th>미처리</th><th>완료</th><th>보스</th><th>보너스</th></tr></thead>
+        <tbody id="zone-detail-table"></tbody></table>
+        <button class="btn btn-primary" onclick="loadZoneDetail()" style="margin-top:12px">🔄 새로고침</button>
+      </div>
+      <div class="panel">
+        <div class="panel-title">📍 핀맵 (군산대 2km)</div>
+        <div id="pins-table"></div>
+        <button class="btn" onclick="loadPins()" style="margin-top:8px">📍 핀 조회</button>
+      </div>
+    </div>
+    <div id="panel-reports" style="display:none">
+      <div class="panel">
+        <div class="panel-title">📍 제보/피드 관리</div>
+        <div id="reports-feed"></div>
+        <button class="btn btn-primary" onclick="loadReports()" style="margin-top:12px">🔄 피드 로드</button>
+      </div>
+    </div>
+    <div id="panel-drone" style="display:none">
+      <div class="panel">
+        <div class="panel-title">🚁 드론/모빌리티 제어</div>
+        <div style="display:flex;gap:8px;margin-bottom:12px">
+          <button class="btn btn-primary" onclick="adminDroneAction('video')">📤 드론 영상 테스트</button>
+          <button class="btn btn-primary" onclick="adminDroneAction('process')">🔍 프레임 분석</button>
+          <button class="btn" onclick="adminDroneAction('patrol')">🔄 순찰 (은파)</button>
+          <button class="btn" onclick="adminMobility()">🤖 모빌리티 경로</button>
+        </div>
+        <div id="admin-drone-result" style="font-size:12px"></div>
+      </div>
+      <div class="panel">
+        <div class="panel-title">🔍 품질 검증</div>
+        <button class="btn btn-primary" onclick="adminQualityCheck()" style="margin-bottom:8px">품질 검증 실행</button>
+        <div id="admin-quality" style="font-size:12px"></div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+const HOST = location.hostname || '203.234.62.176';
+const BASE = {
+  sns:  `http://${HOST}:8501`,
+  game: `http://${HOST}:8502`,
+  gis:  `http://${HOST}:8503`,
+  ai:   `http://${HOST}:8504`,
+  data: `http://${HOST}:8505`,
+  mcp:  `http://${HOST}:8510`,
+  ws:   `http://${HOST}:8520`,
+  drone:`http://${HOST}:8531`,
+  dataAgent:`http://${HOST}:8532`,
+  mobility:`http://${HOST}:8533`,
+};
+
+function showPanel(name) {
+  document.querySelectorAll('[id^="panel-"]').forEach(p => p.style.display = 'none');
+  document.getElementById('panel-' + name).style.display = 'block';
+  document.querySelectorAll('.nav-item').forEach(n => n.classList.remove('active'));
+  event.target.classList.add('active');
+}
+
+async function fetchJSON(url, timeout=3000) {
+  const ctrl = new AbortController();
+  const id = setTimeout(() => ctrl.abort(), timeout);
+  try {
+    const r = await fetch(url, {signal: ctrl.signal});
+    clearTimeout(id);
+    return await r.json();
+  } catch(e) { clearTimeout(id); return null; }
+}
+
+async function checkHealth(url) {
+  const start = Date.now();
+  const data = await fetchJSON(url + '/health', 2000);
+  return {ok: !!data, ms: Date.now() - start, data};
+}
+
+async function checkAllHealth() {
+  const services = [
+    {name:'SNS Service', port:8501, url:BASE.sns},
+    {name:'Game Service', port:8502, url:BASE.game},
+    {name:'GIS Service', port:8503, url:BASE.gis},
+    {name:'AI Service', port:8504, url:BASE.ai},
+    {name:'Data Service', port:8505, url:BASE.data},
+    {name:'MCP Server', port:8510, url:BASE.mcp},
+    {name:'WS Server', port:8520, url:BASE.ws},
+    {name:'Drone Agent', port:8531, url:BASE.drone},
+    {name:'Data Agent', port:8532, url:BASE.dataAgent},
+    {name:'Mobility Agent', port:8533, url:BASE.mobility},
+  ];
+  const tbody = document.getElementById('service-table');
+  tbody.innerHTML = services.map(s => `<tr><td>${s.name}</td><td>:${s.port}</td><td>⏳ 확인중...</td><td>-</td></tr>`).join('');
+
+  for (let i = 0; i < services.length; i++) {
+    const s = services[i];
+    const h = await checkHealth(s.url);
+    const row = tbody.rows[i];
+    row.cells[2].innerHTML = h.ok ?
+      '<span class="badge badge-completed">✅ 정상</span>' :
+      '<span class="badge badge-boss">❌ 오프라인</span>';
+    row.cells[3].textContent = h.ok ? h.ms + 'ms' : '-';
+  }
+
+  // 상태 표시등 업데이트
+  const apiH = await checkHealth(BASE.ai);
+  const wsH = await checkHealth(BASE.ws);
+  const mcpH = await checkHealth(BASE.mcp);
+  document.getElementById('api-status').className = 'status-dot ' + (apiH.ok ? 'on' : 'off');
+  document.getElementById('ws-status').className = 'status-dot ' + (wsH.ok ? 'on' : 'off');
+  document.getElementById('mcp-status').className = 'status-dot ' + (mcpH.ok ? 'on' : 'off');
+}
+
+async function loadOverview() {
+  const gisData = await fetchJSON(BASE.gis + '/zones/stats');
+  if (gisData && gisData.data) {
+    let totalPending = 0, totalCompleted = 0, totalBoss = 0;
+    const tbody = document.getElementById('zone-table');
+    tbody.innerHTML = gisData.data.map(z => {
+      totalPending += (z.pending||0);
+      totalCompleted += (z.completed||0);
+      totalBoss += (z.boss_count||0);
+      return `<tr>
+        <td>${z.name||z.zone_key}</td>
+        <td><span class="badge badge-pending">${z.pending||0}</span></td>
+        <td><span class="badge badge-completed">${z.completed||0}</span></td>
+        <td>${z.boss_count ? '<span class="badge badge-boss">'+z.boss_count+'</span>' : '0'}</td>
+        <td>×${z.bonus_multiplier||1.0}</td>
+      </tr>`;
+    }).join('');
+    document.getElementById('stat-pending').textContent = totalPending;
+    document.getElementById('stat-completed').textContent = totalCompleted;
+    document.getElementById('stat-boss').textContent = totalBoss;
+    document.getElementById('stat-reports').textContent = totalPending + totalCompleted;
+  }
+  document.getElementById('stat-users').textContent = '50';
+}
+
+async function loadRanking() {
+  const data = await fetchJSON(BASE.game + '/ranking/global?size=20');
+  if (data && data.data) {
+    document.getElementById('ranking-table').innerHTML = data.data.map(r =>
+      `<tr><td>${r.rank}</td><td>${r.display_name}</td><td>${r.total_xp}</td><td>Lv.${r.level} ${r.level_title}</td></tr>`
+    ).join('');
+  }
+}
+
+async function triggerExport(type) {
+  const data = await fetchJSON(BASE.dataAgent + '/export/manual', 10000);
+  addLog('info', `공공데이터 내보내기 트리거: ${type}`);
+}
+
+function addLog(level, msg) {
+  const area = document.getElementById('log-area');
+  const time = new Date().toLocaleTimeString();
+  area.innerHTML += `<div class="log-entry"><span class="log-time">${time}</span> <span class="log-${level}">[${level.toUpperCase()}]</span> ${msg}</div>`;
+  area.scrollTop = area.scrollHeight;
+}
+
+// ── Zone Detail ──
+async function loadZoneDetail() {
+  const d = await fetchJSON(BASE.gis + '/zones/stats');
+  if (d && d.data) {
+    document.getElementById('zone-detail-table').innerHTML = d.data.map(z =>
+      `<tr><td>${z.name||z.zone_key}</td><td><span class="badge badge-pending">${z.pending||0}</span></td>
+      <td><span class="badge badge-completed">${z.completed||0}</span></td>
+      <td>${z.boss_count?'<span class="badge badge-boss">'+z.boss_count+'</span>':'0'}</td>
+      <td>×${z.bonus_multiplier||1.0}</td></tr>`
+    ).join('');
+  }
+}
+async function loadPins() {
+  const d = await fetchJSON(BASE.gis + '/pins/nearby?lat=35.9693&lon=126.7369&radius=2000');
+  const el = document.getElementById('pins-table');
+  if (d && d.data && d.data.length > 0) {
+    el.innerHTML = `<table><thead><tr><th>유형</th><th>심각도</th><th>상태</th><th>거리</th></tr></thead><tbody>
+    ${d.data.slice(0,30).map(p => `<tr><td>${p.trash_type}</td><td>${p.severity}</td><td>${p.status}</td><td>${Math.round(p.dist_m)}m</td></tr>`).join('')}</tbody></table>`;
+  } else { el.innerHTML = '<p style="color:#94a3b8;font-size:12px">핀 없음</p>'; }
+}
+async function loadReports() {
+  const d = await fetchJSON(BASE.sns + '/feed?size=20');
+  const el = document.getElementById('reports-feed');
+  if (d && d.data && d.data.length > 0) {
+    el.innerHTML = `<table><thead><tr><th>작성자</th><th>내용</th><th>유형</th><th>좋아요</th><th>구역</th><th>날짜</th></tr></thead><tbody>
+    ${d.data.map(p => `<tr><td>${p.display_name||'-'}</td><td>${(p.content||'').slice(0,30)}</td>
+    <td>${p.trash_type||'-'}</td><td>${p.like_count||0}</td><td>${p.zone_name||'-'}</td>
+    <td>${p.created_at?new Date(p.created_at).toLocaleDateString('ko'):''}</td></tr>`).join('')}</tbody></table>`;
+  } else { el.innerHTML = '<p style="color:#94a3b8;font-size:12px">피드 없음</p>'; }
+}
+// ── Drone Admin ──
+async function adminDroneAction(action) {
+  const el = document.getElementById('admin-drone-result');
+  el.innerHTML = '⏳ 처리 중...';
+  let r;
+  if (action === 'video') {
+    r = await fetchJSON(BASE.drone + '/webhook/video-upload', 10000);
+    if (!r) r = await (await fetch(BASE.drone+'/webhook/video-upload',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({drone_id:'DRONE-01',video_url:'test.mp4',lat:35.9861,lon:126.7222,zone_id:'EUNPA'})})).json().catch(()=>null);
+  } else if (action === 'process') {
+    r = await (await fetch(BASE.drone+'/process-video',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({lat:35.9861,lon:126.7222})})).json().catch(()=>null);
+  } else if (action === 'patrol') {
+    r = await (await fetch(BASE.drone+'/patrol',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({zone_key:'EUNPA',lat:35.9861,lon:126.7222})})).json().catch(()=>null);
+  }
+  el.innerHTML = r ? `<pre style="font-size:11px;max-height:200px;overflow:auto">${JSON.stringify(r,null,2)}</pre>` : '❌ 실패';
+  addLog('info', `드론 ${action}: ${r?'성공':'실패'}`);
+}
+async function adminMobility() {
+  const el = document.getElementById('admin-drone-result');
+  el.innerHTML = '⏳ 경로 요청 중...';
+  const r = await (await fetch(BASE.mobility+'/route/request',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({zone_key:'EUNPA',start_lat:35.9861,start_lon:126.7222,agent_type:'mobility'})})).json().catch(()=>null);
+  el.innerHTML = r ? `<pre style="font-size:11px;max-height:200px;overflow:auto">${JSON.stringify(r,null,2)}</pre>` : '❌ 실패';
+}
+async function adminQualityCheck() {
+  const el = document.getElementById('admin-quality');
+  el.innerHTML = '⏳ 검증 중...';
+  const r = await fetchJSON(BASE.dataAgent+'/quality-check');
+  if (r && r.data) {
+    const d = r.data;
+    el.innerHTML = `<div>품질: <strong style="color:${d.quality_score>80?'#4ade80':'#fbbf24'}">${d.quality_score}%</strong> (${d.total_records}건 중 ${d.valid_records}건 검증)</div>
+    ${d.errors.length?d.errors.map(e=>'<div style="color:#fbbf24">⚠️ '+e+'</div>').join(''):'<div style="color:#4ade80">✅ 오류 없음</div>'}`;
+  } else { el.innerHTML = '❌ 검증 실패'; }
+}
+
+// 초기 로드
+loadOverview();
+checkAllHealth();
+addLog('info', '관리자 대시보드 시작');
+
+// 30초 자동 갱신
+setInterval(() => { loadOverview(); checkAllHealth(); }, 30000);
+</script>
+</body>
+</html>

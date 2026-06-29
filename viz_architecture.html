@@ -1,0 +1,473 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>메타 플로깅 SW 플랫폼 — 전체 시스템 아키텍처</title>
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+body{font-family:'Segoe UI',system-ui,-apple-system,sans-serif;background:#0a0e1a;color:#e2e8f0;overflow-x:hidden}
+.header{text-align:center;padding:32px 20px 16px;background:linear-gradient(135deg,#0f172a 0%,#1a1f3a 100%);border-bottom:1px solid #1e293b}
+.header h1{font-size:28px;font-weight:800;background:linear-gradient(135deg,#4ade80,#38bdf8);-webkit-background-clip:text;-webkit-text-fill-color:transparent}
+.header p{color:#94a3b8;font-size:14px;margin-top:6px}
+.subtitle{font-size:12px;color:#64748b;margin-top:4px}
+.main{max-width:1400px;margin:0 auto;padding:24px 20px}
+.legend{display:flex;gap:16px;justify-content:center;flex-wrap:wrap;margin-bottom:24px}
+.legend-item{display:flex;align-items:center;gap:6px;font-size:12px;color:#94a3b8}
+.legend-dot{width:12px;height:12px;border-radius:3px}
+.layers{display:flex;flex-direction:column;gap:8px}
+.layer{border:1px solid #1e293b;border-radius:16px;padding:16px 20px;transition:all .3s;cursor:pointer;position:relative;overflow:hidden}
+.layer::before{content:'';position:absolute;top:0;left:0;right:0;height:3px;border-radius:16px 16px 0 0}
+.layer:hover{transform:translateY(-2px);box-shadow:0 8px 32px rgba(0,0,0,.4)}
+.layer.active{border-color:#38bdf8}
+.layer-header{display:flex;align-items:center;justify-content:space-between;margin-bottom:12px}
+.layer-num{font-size:11px;font-weight:700;padding:2px 8px;border-radius:20px;letter-spacing:1px}
+.layer-title{font-size:16px;font-weight:700;flex:1;margin-left:12px}
+.layer-desc{font-size:11px;color:#64748b}
+.layer-toggle{font-size:18px;transition:transform .3s;color:#64748b}
+.layer-toggle.open{transform:rotate(180deg)}
+.services{display:grid;gap:8px;margin-top:8px;transition:all .3s}
+.service{background:rgba(255,255,255,.04);border:1px solid rgba(255,255,255,.08);border-radius:10px;padding:12px 14px;transition:all .2s;position:relative}
+.service:hover{background:rgba(255,255,255,.08);border-color:rgba(255,255,255,.15);transform:scale(1.02)}
+.svc-head{display:flex;align-items:center;gap:8px}
+.svc-icon{font-size:18px}
+.svc-name{font-weight:600;font-size:13px}
+.svc-port{font-size:11px;color:#64748b;background:rgba(255,255,255,.06);padding:1px 6px;border-radius:4px;margin-left:auto;font-family:monospace}
+.svc-desc{font-size:11px;color:#94a3b8;margin-top:4px}
+.svc-tech{display:flex;gap:4px;flex-wrap:wrap;margin-top:6px}
+.tech-tag{font-size:10px;padding:2px 6px;border-radius:4px;font-weight:600}
+.l6{background:linear-gradient(135deg,#0f2b1d,#1a2e35)}.l6::before{background:linear-gradient(90deg,#4ade80,#38bdf8)}
+.l5{background:linear-gradient(135deg,#1a1f3a,#1e293b)}.l5::before{background:linear-gradient(90deg,#38bdf8,#818cf8)}
+.l4{background:linear-gradient(135deg,#2a1f2e,#1e293b)}.l4::before{background:linear-gradient(90deg,#a78bfa,#f472b6)}
+.l3{background:linear-gradient(135deg,#2a2510,#1e293b)}.l3::before{background:linear-gradient(90deg,#fbbf24,#f97316)}
+.l2{background:linear-gradient(135deg,#1a2535,#1e293b)}.l2::before{background:linear-gradient(90deg,#06b6d4,#3b82f6)}
+.l1{background:linear-gradient(135deg,#1f1a2e,#1e293b)}.l1::before{background:linear-gradient(90deg,#ec4899,#8b5cf6)}
+.conn-lines{position:relative;height:40px;margin:4px 0}
+.conn-arrow{text-align:center;color:#334155;font-size:20px;line-height:40px;animation:pulse 2s infinite}
+@keyframes pulse{0%,100%{opacity:.4}50%{opacity:1}}
+.detail-panel{position:fixed;top:0;right:-500px;width:480px;height:100vh;background:#0f172a;border-left:1px solid #1e293b;z-index:100;transition:right .3s;overflow-y:auto;padding:24px}
+.detail-panel.show{right:0}
+.detail-close{position:absolute;top:16px;right:16px;background:none;border:none;color:#94a3b8;font-size:24px;cursor:pointer}
+.detail-title{font-size:20px;font-weight:700;margin-bottom:16px}
+.detail-section{margin-bottom:20px}
+.detail-section h3{font-size:13px;color:#64748b;text-transform:uppercase;letter-spacing:1px;margin-bottom:8px}
+.detail-table{width:100%;border-collapse:collapse;font-size:12px}
+.detail-table th{text-align:left;padding:6px 8px;color:#64748b;border-bottom:1px solid #1e293b}
+.detail-table td{padding:6px 8px;border-bottom:1px solid rgba(255,255,255,.04)}
+.overlay{position:fixed;inset:0;background:rgba(0,0,0,.5);z-index:99;display:none}
+.overlay.show{display:block}
+.stats-bar{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:12px;margin-bottom:24px}
+.stat-card{background:#1e293b;border:1px solid #334155;border-radius:12px;padding:14px;text-align:center}
+.stat-val{font-size:24px;font-weight:800;background:linear-gradient(135deg,#4ade80,#38bdf8);-webkit-background-clip:text;-webkit-text-fill-color:transparent}
+.stat-label{font-size:11px;color:#64748b;margin-top:4px}
+.flow-container{margin-top:24px;padding:20px;background:#1e293b;border-radius:14px;border:1px solid #334155}
+.flow-title{font-size:14px;font-weight:700;margin-bottom:16px;display:flex;align-items:center;gap:8px}
+.flow-steps{display:flex;align-items:center;gap:8px;flex-wrap:wrap}
+.flow-step{background:rgba(56,189,248,.1);border:1px solid rgba(56,189,248,.2);padding:6px 12px;border-radius:8px;font-size:11px;font-weight:600;white-space:nowrap}
+.flow-arrow{color:#334155;font-size:16px}
+.port-map{margin-top:24px}
+.port-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(200px,1fr));gap:6px}
+.port-item{display:flex;align-items:center;gap:8px;padding:6px 10px;background:rgba(255,255,255,.03);border-radius:6px;font-size:12px}
+.port-num{font-family:monospace;color:#38bdf8;font-weight:700;min-width:50px}
+.port-svc{color:#94a3b8}
+.hidden{display:none}
+</style>
+</head>
+<body>
+
+<div class="header">
+  <h1>메타 플로깅 SW 플랫폼</h1>
+  <p>전체 시스템 아키텍처 — 6-Layer Microservice Architecture</p>
+  <div class="subtitle">군산대학교 | 은파유원지 · 새만금 · 금강하구둑 | NVIDIA A6000 48GB VRAM</div>
+</div>
+
+<div class="main">
+  <!-- 통계 카드 -->
+  <div class="stats-bar">
+    <div class="stat-card"><div class="stat-val">6</div><div class="stat-label">Layers</div></div>
+    <div class="stat-card"><div class="stat-val">7</div><div class="stat-label">Microservices</div></div>
+    <div class="stat-card"><div class="stat-val">1</div><div class="stat-label">MCP Server (7 Tools)</div></div>
+    <div class="stat-card"><div class="stat-val">5</div><div class="stat-label">AI Agents</div></div>
+    <div class="stat-card"><div class="stat-val">4</div><div class="stat-label">AI/ML Models</div></div>
+    <div class="stat-card"><div class="stat-val">1,000</div><div class="stat-label">동시 접속</div></div>
+  </div>
+
+  <!-- 범례 -->
+  <div class="legend">
+    <div class="legend-item"><div class="legend-dot" style="background:#4ade80"></div>Frontend</div>
+    <div class="legend-item"><div class="legend-dot" style="background:#38bdf8"></div>Backend</div>
+    <div class="legend-item"><div class="legend-dot" style="background:#a78bfa"></div>AI/ML</div>
+    <div class="legend-item"><div class="legend-dot" style="background:#fbbf24"></div>MCP/Agent</div>
+    <div class="legend-item"><div class="legend-dot" style="background:#06b6d4"></div>Infra</div>
+    <div class="legend-item"><div class="legend-dot" style="background:#ec4899"></div>Data Sources</div>
+  </div>
+
+  <!-- Layer 6: Frontend -->
+  <div class="layers">
+    <div class="layer l6" onclick="toggleLayer(this)" data-detail="frontend">
+      <div class="layer-header">
+        <span class="layer-num" style="background:rgba(74,222,128,.2);color:#4ade80">LAYER 6</span>
+        <span class="layer-title">Frontend — 사용자 인터페이스</span>
+        <span class="layer-desc">React Native · Next.js · Vite Admin</span>
+        <span class="layer-toggle">▼</span>
+      </div>
+      <div class="services hidden" style="grid-template-columns:repeat(auto-fit,minmax(280px,1fr))">
+        <div class="service" onclick="event.stopPropagation();showDetail('mobile')">
+          <div class="svc-head"><span class="svc-icon">📱</span><span class="svc-name">모바일 앱</span></div>
+          <div class="svc-desc">React Native (Expo SDK 50) — iOS/Android 플로깅 앱</div>
+          <div class="svc-tech">
+            <span class="tech-tag" style="background:rgba(74,222,128,.15);color:#4ade80">React Native 0.74</span>
+            <span class="tech-tag" style="background:rgba(56,189,248,.15);color:#38bdf8">Expo</span>
+            <span class="tech-tag" style="background:rgba(251,191,36,.15);color:#fbbf24">MapLibre</span>
+          </div>
+        </div>
+        <div class="service" onclick="event.stopPropagation();showDetail('web')">
+          <div class="svc-head"><span class="svc-icon">🌐</span><span class="svc-name">웹 프론트엔드</span><span class="svc-port">:3000</span></div>
+          <div class="svc-desc">Next.js 14 (App Router) — 공개 웹 포털</div>
+          <div class="svc-tech">
+            <span class="tech-tag" style="background:rgba(74,222,128,.15);color:#4ade80">Next.js 14</span>
+            <span class="tech-tag" style="background:rgba(167,139,250,.15);color:#a78bfa">Zustand</span>
+            <span class="tech-tag" style="background:rgba(56,189,248,.15);color:#38bdf8">TanStack Query</span>
+          </div>
+        </div>
+        <div class="service" onclick="event.stopPropagation();showDetail('admin')">
+          <div class="svc-head"><span class="svc-icon">🖥️</span><span class="svc-name">관리자 대시보드</span></div>
+          <div class="svc-desc">Vite + React — 실시간 모니터링 · 공공데이터 관리</div>
+          <div class="svc-tech">
+            <span class="tech-tag" style="background:rgba(249,115,22,.15);color:#f97316">Vite</span>
+            <span class="tech-tag" style="background:rgba(56,189,248,.15);color:#38bdf8">React</span>
+            <span class="tech-tag" style="background:rgba(74,222,128,.15);color:#4ade80">Socket.io 4.x</span>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="conn-lines"><div class="conn-arrow">▼ ▼ ▼ REST · WebSocket · GraphQL ▼ ▼ ▼</div></div>
+
+    <!-- Layer 5: Backend -->
+    <div class="layer l5" onclick="toggleLayer(this)" data-detail="backend">
+      <div class="layer-header">
+        <span class="layer-num" style="background:rgba(56,189,248,.2);color:#38bdf8">LAYER 5</span>
+        <span class="layer-title">Backend Microservices — FastAPI</span>
+        <span class="layer-desc">api-gateway · sns · gamification · gis · public-api</span>
+        <span class="layer-toggle">▼</span>
+      </div>
+      <div class="services hidden" style="grid-template-columns:repeat(auto-fit,minmax(220px,1fr))">
+        <div class="service">
+          <div class="svc-head"><span class="svc-icon">🚪</span><span class="svc-name">API Gateway</span><span class="svc-port">:8500</span></div>
+          <div class="svc-desc">API 라우팅 · JWT 인증 · Rate Limiting</div>
+          <div class="svc-tech"><span class="tech-tag" style="background:rgba(56,189,248,.15);color:#38bdf8">Kong 3.5</span></div>
+        </div>
+        <div class="service">
+          <div class="svc-head"><span class="svc-icon">📸</span><span class="svc-name">SNS Service</span><span class="svc-port">:8501</span></div>
+          <div class="svc-desc">게시물 · 피드 · 좋아요 · 해시태그</div>
+          <div class="svc-tech"><span class="tech-tag" style="background:rgba(56,189,248,.15);color:#38bdf8">FastAPI</span><span class="tech-tag" style="background:rgba(167,139,250,.15);color:#a78bfa">asyncpg</span></div>
+        </div>
+        <div class="service">
+          <div class="svc-head"><span class="svc-icon">🎮</span><span class="svc-name">Game Service</span><span class="svc-port">:8502</span></div>
+          <div class="svc-desc">랭킹 · 레벨 · 퀘스트 · 배지</div>
+          <div class="svc-tech"><span class="tech-tag" style="background:rgba(56,189,248,.15);color:#38bdf8">FastAPI</span><span class="tech-tag" style="background:rgba(239,68,68,.15);color:#ef4444">Redis</span></div>
+        </div>
+        <div class="service">
+          <div class="svc-head"><span class="svc-icon">🗺️</span><span class="svc-name">GIS Service</span><span class="svc-port">:8503</span></div>
+          <div class="svc-desc">지오펜싱 · 핀맵 · GeoJSON 내보내기</div>
+          <div class="svc-tech"><span class="tech-tag" style="background:rgba(56,189,248,.15);color:#38bdf8">FastAPI</span><span class="tech-tag" style="background:rgba(74,222,128,.15);color:#4ade80">PostGIS</span></div>
+        </div>
+        <div class="service">
+          <div class="svc-head"><span class="svc-icon">🤖</span><span class="svc-name">AI Service</span><span class="svc-port">:8504</span></div>
+          <div class="svc-desc">YOLO 탐지 · RL 경로 · 인증 검증</div>
+          <div class="svc-tech"><span class="tech-tag" style="background:rgba(167,139,250,.15);color:#a78bfa">GPU</span><span class="tech-tag" style="background:rgba(244,114,182,.15);color:#f472b6">TorchServe</span></div>
+        </div>
+        <div class="service">
+          <div class="svc-head"><span class="svc-icon">📊</span><span class="svc-name">Data Service</span><span class="svc-port">:8505</span></div>
+          <div class="svc-desc">ES 집계 · 시계열 · 공공데이터 API</div>
+          <div class="svc-tech"><span class="tech-tag" style="background:rgba(56,189,248,.15);color:#38bdf8">FastAPI</span><span class="tech-tag" style="background:rgba(251,191,36,.15);color:#fbbf24">ES 8.13</span></div>
+        </div>
+        <div class="service">
+          <div class="svc-head"><span class="svc-icon">🔌</span><span class="svc-name">WebSocket Server</span><span class="svc-port">:8520</span></div>
+          <div class="svc-desc">실시간 핀맵 · 랭킹 · 드론 위치</div>
+          <div class="svc-tech"><span class="tech-tag" style="background:rgba(74,222,128,.15);color:#4ade80">asyncio</span><span class="tech-tag" style="background:rgba(239,68,68,.15);color:#ef4444">Redis PubSub</span></div>
+        </div>
+      </div>
+    </div>
+
+    <div class="conn-lines"><div class="conn-arrow">▼ ▼ ▼ Kafka · gRPC · HTTP ▼ ▼ ▼</div></div>
+
+    <!-- Layer 4: AI/ML -->
+    <div class="layer l4" onclick="toggleLayer(this)">
+      <div class="layer-header">
+        <span class="layer-num" style="background:rgba(167,139,250,.2);color:#a78bfa">LAYER 4</span>
+        <span class="layer-title">AI/ML Engine — NVIDIA A6000 48GB VRAM</span>
+        <span class="layer-desc">YOLO v8 · PPO/SAC RL · ResNet-50 · CLIP</span>
+        <span class="layer-toggle">▼</span>
+      </div>
+      <div class="services hidden" style="grid-template-columns:repeat(auto-fit,minmax(250px,1fr))">
+        <div class="service">
+          <div class="svc-head"><span class="svc-icon">🎯</span><span class="svc-name">YOLO v8x 쓰레기 탐지</span></div>
+          <div class="svc-desc">Ultralytics YOLO v8 — 프레임 단위 객체 탐지 (정확도 ≥90%)</div>
+          <div class="svc-tech">
+            <span class="tech-tag" style="background:rgba(167,139,250,.15);color:#a78bfa">8GB VRAM</span>
+            <span class="tech-tag" style="background:rgba(244,114,182,.15);color:#f472b6">TorchServe</span>
+          </div>
+        </div>
+        <div class="service">
+          <div class="svc-head"><span class="svc-icon">🛤️</span><span class="svc-name">PPO/SAC RL 에이전트</span></div>
+          <div class="svc-desc">Stable-Baselines3 — 최적 수거 경로 생성</div>
+          <div class="svc-tech">
+            <span class="tech-tag" style="background:rgba(167,139,250,.15);color:#a78bfa">4GB VRAM</span>
+            <span class="tech-tag" style="background:rgba(56,189,248,.15);color:#38bdf8">Unity ML-Agents</span>
+          </div>
+        </div>
+        <div class="service">
+          <div class="svc-head"><span class="svc-icon">✅</span><span class="svc-name">ResNet-50 인증 검증</span></div>
+          <div class="svc-desc">전후 이미지 SSIM 비교 → 청소 인증 (≥0.85)</div>
+          <div class="svc-tech">
+            <span class="tech-tag" style="background:rgba(167,139,250,.15);color:#a78bfa">2GB VRAM</span>
+            <span class="tech-tag" style="background:rgba(74,222,128,.15);color:#4ade80">torchvision</span>
+          </div>
+        </div>
+        <div class="service">
+          <div class="svc-head"><span class="svc-icon">🏷️</span><span class="svc-name">CLIP 분류기</span></div>
+          <div class="svc-desc">OpenAI CLIP — 쓰레기 유형 자동 분류</div>
+          <div class="svc-tech">
+            <span class="tech-tag" style="background:rgba(167,139,250,.15);color:#a78bfa">2GB VRAM</span>
+            <span class="tech-tag" style="background:rgba(249,115,22,.15);color:#f97316">OpenAI</span>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="conn-lines"><div class="conn-arrow">▼ ▼ ▼ MCP SSE · Kafka · Tool Calls ▼ ▼ ▼</div></div>
+
+    <!-- Layer 3: MCP/Agents -->
+    <div class="layer l3" onclick="toggleLayer(this)">
+      <div class="layer-header">
+        <span class="layer-num" style="background:rgba(251,191,36,.2);color:#fbbf24">LAYER 3</span>
+        <span class="layer-title">MCP Servers & AI Agents</span>
+        <span class="layer-desc">7 MCP Tools · 5 AI Agents · Trigger Orchestrator</span>
+        <span class="layer-toggle">▼</span>
+      </div>
+      <div class="services hidden" style="grid-template-columns:repeat(auto-fit,minmax(220px,1fr))">
+        <div class="service" style="grid-column:1/-1;border-color:rgba(251,191,36,.3)">
+          <div class="svc-head"><span class="svc-icon">🔧</span><span class="svc-name">MCP Server (FastMCP)</span><span class="svc-port">:8510</span></div>
+          <div class="svc-desc">도구 레지스트리: detect_trash · verify_cleanup · get_zone_pins · optimize_route · award_points · trigger_opendata_export · get_zone_statistics</div>
+        </div>
+        <div class="service">
+          <div class="svc-head"><span class="svc-icon">🚁</span><span class="svc-name">DroneAgent</span><span class="svc-port">:8531</span></div>
+          <div class="svc-desc">드론 영상 → 탐지 → 경로 최적화</div>
+        </div>
+        <div class="service">
+          <div class="svc-head"><span class="svc-icon">🚗</span><span class="svc-name">MobilityAgent</span></div>
+          <div class="svc-desc">자율주행 수거 · 경로 요청</div>
+        </div>
+        <div class="service">
+          <div class="svc-head"><span class="svc-icon">⚔️</span><span class="svc-name">QuestAgent</span></div>
+          <div class="svc-desc">퀘스트 진행 · 배지 지급</div>
+        </div>
+        <div class="service">
+          <div class="svc-head"><span class="svc-icon">📤</span><span class="svc-name">DataAgent</span><span class="svc-port">:8532</span></div>
+          <div class="svc-desc">GeoJSON · COCO 내보내기</div>
+        </div>
+        <div class="service">
+          <div class="svc-head"><span class="svc-icon">⏰</span><span class="svc-name">SchedulerAgent</span></div>
+          <div class="svc-desc">MV 갱신 · 보스레이드 · 주간 초기화</div>
+        </div>
+      </div>
+    </div>
+
+    <div class="conn-lines"><div class="conn-arrow">▼ ▼ ▼ TCP · AMQP · S3 API ▼ ▼ ▼</div></div>
+
+    <!-- Layer 2: Infra -->
+    <div class="layer l2" onclick="toggleLayer(this)">
+      <div class="layer-header">
+        <span class="layer-num" style="background:rgba(6,182,212,.2);color:#06b6d4">LAYER 2</span>
+        <span class="layer-title">Cloud Infra — 현재: 로컬 spark-a6 서버</span>
+        <span class="layer-desc">Kafka 3.7 · MinIO(→S3) · Redis 7.2 · PostGIS · ES 8.13</span>
+        <span class="layer-toggle">▼</span>
+      </div>
+      <div class="services hidden" style="grid-template-columns:repeat(auto-fit,minmax(200px,1fr))">
+        <div class="service">
+          <div class="svc-head"><span class="svc-icon">🐘</span><span class="svc-name">PostgreSQL + PostGIS</span><span class="svc-port">:5433</span></div>
+          <div class="svc-desc">주 DB · 지오펜싱 · 200 connections (기존 :5432 회피)</div>
+        </div>
+        <div class="service">
+          <div class="svc-head"><span class="svc-icon">⚡</span><span class="svc-name">Redis 7.2</span><span class="svc-port">:6380</span></div>
+          <div class="svc-desc">캐시 · 랭킹 · 세션 · 4GB LRU (기존 :6379 회피)</div>
+        </div>
+        <div class="service">
+          <div class="svc-head"><span class="svc-icon">📨</span><span class="svc-name">Apache Kafka</span><span class="svc-port">:9093</span></div>
+          <div class="svc-desc">이벤트 스트림 · 12 partitions (기존 :9092 회피)</div>
+        </div>
+        <div class="service">
+          <div class="svc-head"><span class="svc-icon">📦</span><span class="svc-name">MinIO (→ S3)</span><span class="svc-port">:9001</span></div>
+          <div class="svc-desc">이미지 · 영상 · 공공데이터 버킷</div>
+        </div>
+        <div class="service">
+          <div class="svc-head"><span class="svc-icon">🔍</span><span class="svc-name">Elasticsearch</span><span class="svc-port">:9201</span></div>
+          <div class="svc-desc">검색 · 집계 · 3 shards</div>
+        </div>
+        <div class="service">
+          <div class="svc-head"><span class="svc-icon">🌐</span><span class="svc-name">Nginx</span><span class="svc-port">:80/443</span></div>
+          <div class="svc-desc">리버스 프록시 · SSL · Rate Limit</div>
+        </div>
+        <div class="service">
+          <div class="svc-head"><span class="svc-icon">📈</span><span class="svc-name">Prometheus + Grafana</span><span class="svc-port">:9090/:3100</span></div>
+          <div class="svc-desc">메트릭 수집 · 모니터링 대시보드</div>
+        </div>
+      </div>
+    </div>
+
+    <div class="conn-lines"><div class="conn-arrow">▼ ▼ ▼ RTSP · SDK · Simulator ▼ ▼ ▼</div></div>
+
+    <!-- Layer 1: Data Sources -->
+    <div class="layer l1" onclick="toggleLayer(this)">
+      <div class="layer-header">
+        <span class="layer-num" style="background:rgba(236,72,153,.2);color:#ec4899">LAYER 1</span>
+        <span class="layer-title">Data Sources — 데이터 수집 원천</span>
+        <span class="layer-desc">SNS 앱 · 드론 SDK · 자율주행 모빌리티 · Unity 시뮬레이터</span>
+        <span class="layer-toggle">▼</span>
+      </div>
+      <div class="services hidden" style="grid-template-columns:repeat(auto-fit,minmax(250px,1fr))">
+        <div class="service">
+          <div class="svc-head"><span class="svc-icon">📱</span><span class="svc-name">SNS 앱 (사용자 제보)</span></div>
+          <div class="svc-desc">GPS + 이미지 업로드 → POST /posts/report</div>
+          <div class="svc-tech"><span class="tech-tag" style="background:rgba(236,72,153,.15);color:#ec4899">plogging.report.created</span></div>
+        </div>
+        <div class="service">
+          <div class="svc-head"><span class="svc-icon">🚁</span><span class="svc-name">드론 SDK (RTSP)</span></div>
+          <div class="svc-desc">1fps 프레임 버퍼 → YOLO 배치 추론</div>
+          <div class="svc-tech"><span class="tech-tag" style="background:rgba(236,72,153,.15);color:#ec4899">drone.stream.uploaded</span></div>
+        </div>
+        <div class="service">
+          <div class="svc-head"><span class="svc-icon">🚗</span><span class="svc-name">자율주행 모빌리티</span></div>
+          <div class="svc-desc">수거 경로 로그 → RL 역재생성</div>
+          <div class="svc-tech"><span class="tech-tag" style="background:rgba(236,72,153,.15);color:#ec4899">mobility.route.completed</span></div>
+        </div>
+        <div class="service">
+          <div class="svc-head"><span class="svc-icon">🎮</span><span class="svc-name">Unity 시뮬레이터</span></div>
+          <div class="svc-desc">ML-Agents RL 학습 환경 · source=unity_sim</div>
+          <div class="svc-tech"><span class="tech-tag" style="background:rgba(236,72,153,.15);color:#ec4899">시뮬 데이터</span></div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- 핵심 데이터 흐름 -->
+  <div class="flow-container" style="margin-top:32px">
+    <div class="flow-title">🔄 핵심 데이터 흐름 — 제보 → 탐지 → 게미피케이션</div>
+    <div class="flow-steps">
+      <div class="flow-step" style="background:rgba(236,72,153,.15);border-color:rgba(236,72,153,.3)">📱 SNS 업로드</div>
+      <span class="flow-arrow">→</span>
+      <div class="flow-step">POST /api/v1/posts</div>
+      <span class="flow-arrow">→</span>
+      <div class="flow-step" style="background:rgba(6,182,212,.15);border-color:rgba(6,182,212,.3)">S3 + Kafka</div>
+      <span class="flow-arrow">→</span>
+      <div class="flow-step" style="background:rgba(167,139,250,.15);border-color:rgba(167,139,250,.3)">🎯 YOLO 추론</div>
+      <span class="flow-arrow">→</span>
+      <div class="flow-step" style="background:rgba(74,222,128,.15);border-color:rgba(74,222,128,.3)">PostGIS 저장</div>
+      <span class="flow-arrow">→</span>
+      <div class="flow-step" style="background:rgba(251,191,36,.15);border-color:rgba(251,191,36,.3)">🎮 XP 적립</div>
+      <span class="flow-arrow">→</span>
+      <div class="flow-step" style="background:rgba(74,222,128,.15);border-color:rgba(74,222,128,.3)">🔌 WS Push</div>
+    </div>
+  </div>
+
+  <div class="flow-container">
+    <div class="flow-title">🚁 드론 → 탐지 → 경로 최적화</div>
+    <div class="flow-steps">
+      <div class="flow-step" style="background:rgba(236,72,153,.15);border-color:rgba(236,72,153,.3)">🚁 RTSP 스트림</div>
+      <span class="flow-arrow">→</span>
+      <div class="flow-step">DroneAgent: 1fps</div>
+      <span class="flow-arrow">→</span>
+      <div class="flow-step" style="background:rgba(167,139,250,.15);border-color:rgba(167,139,250,.3)">🎯 YOLO 배치</div>
+      <span class="flow-arrow">→</span>
+      <div class="flow-step" style="background:rgba(6,182,212,.15);border-color:rgba(6,182,212,.3)">Kafka plogging.raw.drone</div>
+      <span class="flow-arrow">→</span>
+      <div class="flow-step" style="background:rgba(167,139,250,.15);border-color:rgba(167,139,250,.3)">🛤️ RL 최적 경로</div>
+      <span class="flow-arrow">→</span>
+      <div class="flow-step" style="background:rgba(251,191,36,.15);border-color:rgba(251,191,36,.3)">🚗 모빌리티 디스패치</div>
+    </div>
+  </div>
+
+  <!-- 포트 맵 -->
+  <div class="port-map">
+    <div class="flow-container">
+      <div class="flow-title">🔌 컨테이너 포트 맵</div>
+      <div class="port-grid">
+        <div class="port-item"><span class="port-num">:5433</span><span class="port-svc">PostgreSQL + PostGIS</span></div>
+        <div class="port-item"><span class="port-num">:6380</span><span class="port-svc">Redis 7.2</span></div>
+        <div class="port-item"><span class="port-num">:9093</span><span class="port-svc">Kafka</span></div>
+        <div class="port-item"><span class="port-num">:9001</span><span class="port-svc">MinIO (S3)</span></div>
+        <div class="port-item"><span class="port-num">:9201</span><span class="port-svc">Elasticsearch</span></div>
+        <div class="port-item"><span class="port-num">:8500</span><span class="port-svc">API Gateway</span></div>
+        <div class="port-item"><span class="port-num">:8501</span><span class="port-svc">SNS Service</span></div>
+        <div class="port-item"><span class="port-num">:8502</span><span class="port-svc">Game Service</span></div>
+        <div class="port-item"><span class="port-num">:8503</span><span class="port-svc">GIS Service</span></div>
+        <div class="port-item"><span class="port-num">:8504</span><span class="port-svc">AI Service (GPU)</span></div>
+        <div class="port-item"><span class="port-num">:8505</span><span class="port-svc">Data / Public API</span></div>
+        <div class="port-item"><span class="port-num">:8510</span><span class="port-svc">MCP Server (7 Tools)</span></div>
+        <div class="port-item"><span class="port-num">:8520</span><span class="port-svc">WebSocket Server</span></div>
+        <div class="port-item"><span class="port-num">:8531</span><span class="port-svc">Drone Agent</span></div>
+        <div class="port-item"><span class="port-num">:8532</span><span class="port-svc">Data Agent</span></div>
+        <div class="port-item"><span class="port-num">:8533</span><span class="port-svc">Mobility Agent</span></div>
+        <div class="port-item"><span class="port-num">:7070</span><span class="port-svc">TorchServe</span></div>
+        <div class="port-item"><span class="port-num">:80/443</span><span class="port-svc">Nginx</span></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- 12-Factor 전환 -->
+  <div class="flow-container" style="margin-top:16px">
+    <div class="flow-title">☁️ 로컬 → 클라우드 전환 (12-Factor App)</div>
+    <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(280px,1fr));gap:8px;font-size:12px">
+      <div class="service">
+        <div class="svc-head"><span class="svc-icon">📦</span><span class="svc-name">MinIO → AWS S3</span></div>
+        <div class="svc-desc" style="font-family:monospace;color:#38bdf8">.env: MINIO_ENDPOINT → S3 endpoint</div>
+      </div>
+      <div class="service">
+        <div class="svc-head"><span class="svc-icon">📨</span><span class="svc-name">Kafka → AWS MSK</span></div>
+        <div class="svc-desc" style="font-family:monospace;color:#38bdf8">.env: KAFKA_BOOTSTRAP_SERVERS</div>
+      </div>
+      <div class="service">
+        <div class="svc-head"><span class="svc-icon">🐘</span><span class="svc-name">PostgreSQL → RDS</span></div>
+        <div class="svc-desc" style="font-family:monospace;color:#38bdf8">.env: DATABASE_URL</div>
+      </div>
+      <div class="service">
+        <div class="svc-head"><span class="svc-icon">🤖</span><span class="svc-name">A6000 → SageMaker</span></div>
+        <div class="svc-desc" style="font-family:monospace;color:#38bdf8">.env: TORCHSERVE_HOST</div>
+      </div>
+    </div>
+    <div style="margin-top:12px;text-align:center;color:#4ade80;font-size:13px;font-weight:700">
+      코드 변경 없이 .env 교체만으로 전환 가능
+    </div>
+  </div>
+</div>
+
+<script>
+function toggleLayer(el) {
+  const svc = el.querySelector('.services');
+  const toggle = el.querySelector('.layer-toggle');
+  if (svc.classList.contains('hidden')) {
+    svc.classList.remove('hidden');
+    toggle.classList.add('open');
+    el.classList.add('active');
+  } else {
+    svc.classList.add('hidden');
+    toggle.classList.remove('open');
+    el.classList.remove('active');
+  }
+}
+
+// Auto-expand all layers on load
+document.addEventListener('DOMContentLoaded', () => {
+  document.querySelectorAll('.layer').forEach(l => {
+    const svc = l.querySelector('.services');
+    const toggle = l.querySelector('.layer-toggle');
+    svc.classList.remove('hidden');
+    toggle.classList.add('open');
+    l.classList.add('active');
+  });
+});
+</script>
+</body>
+</html>

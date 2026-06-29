@@ -1,0 +1,48 @@
+_format_version: "3.0"
+
+services:
+  - name: sns-service
+    url: http://203.234.62.176:8501
+    routes:
+      - name: sns-routes
+        paths: ["/api/v1/posts", "/api/v1/feed", "/api/v1/search", "/api/v1/sns"]
+    plugins:
+      - name: rate-limiting
+        config: { minute: 60, policy: local }
+
+  - name: game-service
+    url: http://203.234.62.176:8502
+    routes:
+      - name: game-routes
+        paths: ["/api/v1/game", "/api/v1/quests", "/api/v1/ranking", "/api/v1/points", "/api/v1/profile"]
+
+  - name: gis-service
+    url: http://203.234.62.176:8503
+    routes:
+      - name: gis-routes
+        paths: ["/api/v1/gis", "/api/v1/zones", "/api/v1/pins"]
+
+  - name: ai-service
+    url: http://203.234.62.176:8504
+    routes:
+      - name: ai-routes
+        paths: ["/api/v1/ai", "/api/v1/predictions"]
+
+  - name: data-service
+    url: http://203.234.62.176:8505
+    routes:
+      - name: data-routes
+        paths: ["/api/v1/data", "/api/v1/opendata", "/api/v1/statistics"]
+
+  - name: ws-server
+    url: http://203.234.62.176:8520
+    routes:
+      - name: ws-routes
+        paths: ["/ws"]
+
+plugins:
+  - name: cors
+    config:
+      origins: ["*"]
+      methods: [GET, POST, PUT, DELETE, OPTIONS]
+      headers: [Authorization, Content-Type]

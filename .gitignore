@@ -1,0 +1,57 @@
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+*.egg
+dist/
+build/
+
+# 환경 변수 (민감 정보)
+.env
+*.env.local
+.env.*.local
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Logs
+*.log
+platform/logs/
+
+# Data (대용량)
+/data/
+!/data/.gitkeep
+data/*.json
+data/*.csv
+data/*.geojson
+*.tar.gz
+*.zip
+
+# Conda
+.conda/
+
+# Docker volumes
+platform/infra/docker/volumes/
+
+# MinIO data
+platform/infra/minio/
+
+# Node
+node_modules/
+
+# AI 모델 가중치
+*.pt
+*.pth
+*.onnx
+*.mar
+
+# Nohup
+nohup.out
