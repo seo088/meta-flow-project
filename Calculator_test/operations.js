@@ -15,6 +15,17 @@
       symbol: 'x',
       apply: (left, right) => left * right,
     },
+    divide: {
+      label: 'Divide',
+      symbol: '/',
+      apply: (left, right) => {
+        if (right === 0) {
+          throw new Error('Cannot divide by zero');
+        }
+
+        return left / right;
+      },
+    },
   };
 
   function calculate(operationKey, leftValue, rightValue) {
