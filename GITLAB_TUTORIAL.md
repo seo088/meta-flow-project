@@ -54,11 +54,11 @@ git config --global http.https://203.234.62.175:5443.sslVerify false
 
 ```bash
 # 그룹 ID 확인 (system 그룹)
-curl -sk --header "PRIVATE-TOKEN: glpat-REPLACE_WITH_YOUR_TOKEN" \
+curl -sk --header "PRIVATE-TOKEN: <GITLAB_PERSONAL_ACCESS_TOKEN>" \
   "https://203.234.62.175:5443/api/v4/groups?search=system" | python3 -m json.tool
 
 # 프로젝트 생성 (namespace_id는 위에서 확인한 그룹 ID)
-curl -sk --header "PRIVATE-TOKEN: glpat-REPLACE_WITH_YOUR_TOKEN" \
+curl -sk --header "PRIVATE-TOKEN: <GITLAB_PERSONAL_ACCESS_TOKEN>" \
   --data "name=meta-flow&namespace_id=<GROUP_ID>&visibility=private" \
   "https://203.234.62.175:5443/api/v4/projects"
 ```
@@ -158,7 +158,7 @@ EOF
 
 ```bash
 # Personal Access Token을 URL에 포함하는 방법
-git remote add origin https://jwon:glpat-REPLACE_WITH_YOUR_TOKEN@203.234.62.175:5443/system/meta-flow.git
+git remote add origin https://jwon:<GITLAB_PERSONAL_ACCESS_TOKEN>@203.234.62.175:5443/system/meta-flow.git
 
 # 또는 토큰 없이 추가 후, push 시 입력
 git remote add origin https://203.234.62.175:5443/system/meta-flow.git

@@ -27,13 +27,22 @@ Thumbs.db
 platform/logs/
 
 # Data (대용량)
-/data/
-!/data/.gitkeep
 data/*.json
 data/*.csv
 data/*.geojson
+data/03.External_data/
 *.tar.gz
 *.zip
+
+# DB 백업 덤프 (대용량/민감)
+platform/db_backup/
+
+# 사용자 업로드 아바타 (런타임 데이터)
+platform/apps/web/avatars/
+
+# Claude Code 워크트리/로컬 설정
+.claude/worktrees/
+.claude/settings.local.json
 
 # Conda
 .conda/

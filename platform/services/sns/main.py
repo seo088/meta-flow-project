@@ -21,8 +21,9 @@ from core.auth import get_current_user, get_optional_user, create_access_token
 from core.db import create_db_pool, create_redis
 from core.logger import get_logger
 from core.content_filter import check_content
-from core.gamification import get_level, grant_xp, calc_xp
+from core.gamification import get_level, grant_xp, calc_xp, check_and_award_badges
 from core.cache_agent import CacheAgent
+from core.ingest import ingest_report, compute_minio_external_host
 
 logger = get_logger("sns-service")
 
@@ -807,6 +808,253 @@ async def admin_export_hidden(current_user: dict = Depends(get_current_user)):
     return {"success": True, "data": [dict(r) for r in rows]}
 
 
+# ═══════════════════════════════════════════════════════════════════
+# 배치 제보 적재 (외부 데이터셋) — 코어: shared/core/ingest.py
+#   인증: role in (admin, system)  ·  reporter = 호출 계정(dataset_bot 등)
+# ═══════════════════════════════════════════════════════════════════
+def _ingest_authorized(current_user: dict) -> bool:
+    return current_user.get("role") in ("admin", "system")
+
+
+def _resolve_local_path(local_path: str, base_dir: Optional[str]) -> Optional[bytes]:
+    """admin/system 전용. base_dir 하위로 제한된 서버 로컬 파일 읽기 (경로 탈출 차단)."""
+    real = os.path.realpath(local_path)
+    if base_dir:
+        base = os.path.realpath(base_dir)
+        if not (real == base or real.startswith(base + os.sep)):
+            raise ValueError(f"허용된 base_dir 밖의 경로: {local_path}")
+    with open(real, "rb") as fh:
+        return fh.read()
+
+
+def _minio_cfg():
+    endpoint = os.environ.get("MINIO_ENDPOINT", "localhost:9001")
+    host = os.environ.get("SERVER_HOST")
+    return (os.environ.get("MINIO_BUCKET_IMAGES", "plogging-images"),
+            compute_minio_external_host(endpoint, host))
+
+
+@app.post("/admin/reports/ingest-batch")
+async def admin_ingest_batch(payload: dict = Body(...), current_user: dict = Depends(get_current_user)):
+    """
+    배치 제보 적재. body:
+      { batch_id, source_dataset, dry_run?, emit_events?, base_dir?,
+        items: [ { filename, local_path?|url?, labels:[{label,size,quantity}],
+                   lat?, lon?, content?, hashtags?, captured_at?, record_source? } ] }
+    """
+    if not _ingest_authorized(current_user):
+        return {"success": False, "error": "적재 권한 필요(admin/system)"}
+    db = app.state.db
+    bucket, external_host = _minio_cfg()
+    batch_id = payload.get("batch_id")
+    source_dataset = payload.get("source_dataset")
+    dry_run = bool(payload.get("dry_run"))
+    emit_events = bool(payload.get("emit_events"))
+    base_dir = payload.get("base_dir")
+    items = payload.get("items") or []
+
+    results = []
+    async with db.acquire() as conn:
+        for it in items:
+            fn = it.get("filename") or "image.jpg"
+            try:
+                image_bytes = None
+                if it.get("local_path"):
+                    image_bytes = _resolve_local_path(it["local_path"], base_dir)
+                r = await ingest_report(
+                    conn, app.state.minio,
+                    reporter_id=current_user["user_id"], filename=fn,
+                    items=it.get("labels") or [], image_bytes=image_bytes,
+                    source_url=it.get("url"), lat=it.get("lat"), lon=it.get("lon"),
+                    content=it.get("content", ""), hashtags=it.get("hashtags") or [],
+                    captured_at=it.get("captured_at"), record_source=it.get("record_source"),
+                    source_dataset=source_dataset, batch_id=batch_id,
+                    minio_bucket=bucket, minio_external_host=external_host,
+                    kafka=app.state.kafka, emit_events=emit_events, dry_run=dry_run,
+                )
+            except Exception as e:
+                r = {"status": "failed", "filename": fn, "reason": str(e)}
+            results.append(r)
+
+    summary = {"total": len(results),
+               "created": sum(1 for r in results if r["status"] == "created"),
+               "skipped": sum(1 for r in results if r["status"] == "skipped"),
+               "failed": sum(1 for r in results if r["status"] == "failed")}
+    return {"success": True, "data": {"results": results, "summary": summary, "dry_run": dry_run}}
+
+
+@app.post("/admin/reports/ingest")
+async def admin_ingest_single(
+    filename: str = Form(...),
+    labels: str = Form("[]"),
+    lat: Optional[float] = Form(None),
+    lon: Optional[float] = Form(None),
+    content: str = Form(""),
+    hashtags: str = Form(""),
+    captured_at: Optional[str] = Form(None),
+    record_source: Optional[str] = Form(None),
+    source_dataset: Optional[str] = Form(None),
+    batch_id: Optional[str] = Form(None),
+    dry_run: bool = Form(False),
+    file: Optional[UploadFile] = File(None),
+    url: Optional[str] = Form(None),
+    current_user: dict = Depends(get_current_user),
+):
+    """단건 적재(업로드 모드 multipart 또는 url 참조). labels/hashtags 는 JSON/CSV 문자열."""
+    if not _ingest_authorized(current_user):
+        return {"success": False, "error": "적재 권한 필요(admin/system)"}
+    import json as _json
+    bucket, external_host = _minio_cfg()
+    try:
+        label_items = _json.loads(labels) if labels else []
+    except Exception:
+        label_items = []
+    tags = [t.strip() for t in hashtags.split(",") if t.strip()]
+    image_bytes = await file.read() if file is not None else None
+    async with app.state.db.acquire() as conn:
+        r = await ingest_report(
+            conn, app.state.minio, reporter_id=current_user["user_id"], filename=filename,
+            items=label_items, image_bytes=image_bytes, source_url=url,
+            lat=lat, lon=lon, content=content, hashtags=tags,
+            captured_at=captured_at, record_source=record_source,
+            source_dataset=source_dataset, batch_id=batch_id,
+            minio_bucket=bucket, minio_external_host=external_host,
+            kafka=app.state.kafka, emit_events=False, dry_run=dry_run,
+        )
+    return {"success": r["status"] != "failed", "data": r}
+
+
+@app.get("/admin/reports/batches")
+async def report_batches(current_user: dict = Depends(get_current_user)):
+    """배치 적재 현황 — batch별 집계 + 카테고리/수거구분 분포 (진행상황 UI·통계 카드 공용)."""
+    if not _ingest_authorized(current_user):
+        return {"success": False, "error": "권한 필요(admin/system)"}
+    db = app.state.db
+    total = await db.fetchval("SELECT COUNT(*) FROM trash_reports WHERE source='external_di'") or 0
+    with_loc = await db.fetchval(
+        "SELECT COUNT(*) FROM trash_reports WHERE source='external_di' AND location IS NOT NULL") or 0
+    batches = await db.fetch("""
+        SELECT gt_label->>'ingested_batch' AS batch_id,
+               gt_label->>'source_dataset' AS dataset,
+               COUNT(*) AS total,
+               COUNT(*) FILTER (WHERE location IS NOT NULL) AS with_location,
+               MIN(created_at) AS started_at, MAX(created_at) AS last_at
+        FROM trash_reports
+        WHERE source='external_di' AND gt_label IS NOT NULL
+        GROUP BY 1,2 ORDER BY MAX(created_at) DESC
+    """)
+    by_type = await db.fetch("""
+        SELECT trash_type, handling, COUNT(*) AS cnt
+        FROM trash_reports WHERE source='external_di'
+        GROUP BY 1,2 ORDER BY 3 DESC
+    """)
+    return {"success": True, "data": {
+        "total": total, "with_location": with_loc,
+        "batches": [dict(b) for b in batches],
+        "by_type": [dict(t) for t in by_type],
+    }}
+
+
+@app.get("/admin/reports/datasets")
+async def report_datasets(current_user: dict = Depends(get_current_user)):
+    """적재된 외부 데이터셋(source_dataset) 목록 — 필터/자동완성용."""
+    if not _ingest_authorized(current_user):
+        return {"success": False, "error": "권한 필요(admin/system)"}
+    rows = await app.state.db.fetch("""
+        SELECT gt_label->>'source_dataset' AS dataset,
+               COUNT(*) AS total,
+               COUNT(DISTINCT gt_label->>'ingested_batch') AS batches,
+               MAX(created_at) AS last_at
+        FROM trash_reports
+        WHERE source='external_di' AND gt_label->>'source_dataset' IS NOT NULL
+        GROUP BY 1 ORDER BY MAX(created_at) DESC
+    """)
+    return {"success": True, "data": [dict(r) for r in rows]}
+
+
+@app.get("/admin/reports/batches/{batch_id}")
+async def report_batch_detail(
+    batch_id: str,
+    page: int = Query(1, ge=1),
+    size: int = Query(60, le=200),
+    current_user: dict = Depends(get_current_user),
+):
+    """단일 배치 상세 — 제보 목록(이미지/좌표/분류) + 배치별 분포·품질 지표."""
+    if not _ingest_authorized(current_user):
+        return {"success": False, "error": "권한 필요(admin/system)"}
+    db = app.state.db
+    where = "source='external_di' AND gt_label->>'ingested_batch' = $1"
+    summary = await db.fetchrow(f"""
+        SELECT COUNT(*) AS total,
+               COUNT(*) FILTER (WHERE location IS NOT NULL) AS with_location,
+               COUNT(*) FILTER (WHERE trash_type='unknown') AS unknown_cnt,
+               MAX(gt_label->>'source_dataset') AS dataset,
+               MIN(created_at) AS started_at, MAX(created_at) AS last_at
+        FROM trash_reports WHERE {where}
+    """, batch_id)
+    if not summary or summary["total"] == 0:
+        return {"success": False, "error": "해당 배치를 찾을 수 없습니다"}
+    dist = await db.fetch(f"""
+        SELECT trash_type, severity, handling, COUNT(*) AS cnt
+        FROM trash_reports WHERE {where}
+        GROUP BY 1,2,3 ORDER BY 4 DESC
+    """, batch_id)
+    offset = (page - 1) * size
+    reports = await db.fetch(f"""
+        SELECT id, trash_type, severity, handling, status,
+               ST_X(location::geometry) AS lon, ST_Y(location::geometry) AS lat,
+               image_urls, gt_label, created_at
+        FROM trash_reports WHERE {where}
+        ORDER BY created_at DESC LIMIT $2 OFFSET $3
+    """, batch_id, size, offset)
+    return {"success": True, "data": {
+        "batch_id": batch_id,
+        "summary": dict(summary),
+        "distribution": [dict(d) for d in dist],
+        "reports": [dict(r) for r in reports],
+        "page": page, "size": size,
+    }}
+
+
+@app.delete("/admin/reports/batches/{batch_id}")
+async def report_batch_rollback(
+    batch_id: str,
+    current_user: dict = Depends(get_current_user),
+):
+    """배치 롤백 — 해당 batch_id의 external_di 제보 + 연결 게시글 삭제 (ADR-003 롤백 정책)."""
+    if not _ingest_authorized(current_user):
+        return {"success": False, "error": "권한 필요(admin/system)"}
+    db = app.state.db
+    where = "source='external_di' AND gt_label->>'ingested_batch' = $1"
+    n = await db.fetchval(f"SELECT COUNT(*) FROM trash_reports WHERE {where}", batch_id)
+    if not n:
+        return {"success": False, "error": "해당 배치를 찾을 수 없습니다"}
+    async with db.acquire() as conn:
+        async with conn.transaction():
+            await conn.execute(
+                f"DELETE FROM post_likes WHERE post_id IN (SELECT p.id FROM posts p "
+                f"JOIN trash_reports tr ON tr.id=p.report_id WHERE tr.{where})", batch_id)
+            await conn.execute(
+                f"DELETE FROM post_comments WHERE post_id IN (SELECT p.id FROM posts p "
+                f"JOIN trash_reports tr ON tr.id=p.report_id WHERE tr.{where})", batch_id)
+            await conn.execute(
+                f"DELETE FROM posts WHERE report_id IN "
+                f"(SELECT id FROM trash_reports WHERE {where})", batch_id)
+            await conn.execute(f"DELETE FROM trash_reports WHERE {where}", batch_id)
+    logger.warning(f"[batch-rollback] batch={batch_id} reports={n} by={current_user.get('username')}")
+    return {"success": True, "data": {"deleted": n, "batch_id": batch_id}}
+
+
+@app.get("/report-categories")
+async def list_report_categories():
+    """제보 쓰레기 카테고리 사전 (SSOT: report_categories). 제보 폼·현황·핀맵·가이드 공용."""
+    rows = await app.state.db.fetch("""
+        SELECT key, label_ko, recycle_group, handling, recyclable, color, default_severity, is_builtin
+        FROM report_categories ORDER BY is_builtin DESC, key
+    """)
+    return {"success": True, "data": [dict(r) for r in rows]}
+
+
 @app.get("/admin/users")
 async def admin_list_users(
     page: int = Query(1, ge=1),
@@ -991,6 +1239,35 @@ async def admin_set_role(
 # 게시물 작성 / 피드
 # ═══════════════════════════════════════════════════════════
 
+def _exif_gps(data: bytes):
+    """업로드 이미지 EXIF에서 GPS 좌표(lat,lon) 추출. 실패 시 None. (Pillow)"""
+    try:
+        import io as _io
+        from PIL import Image
+        from PIL.ExifTags import TAGS, GPSTAGS
+        exif = Image.open(_io.BytesIO(data))._getexif()
+        if not exif:
+            return None
+        gps = {}
+        for tag, val in exif.items():
+            if TAGS.get(tag) == "GPSInfo":
+                gps = {GPSTAGS.get(t, t): v for t, v in val.items()}
+        if not gps or "GPSLatitude" not in gps or "GPSLongitude" not in gps:
+            return None
+        def _dms(v):
+            return float(v[0]) + float(v[1]) / 60.0 + float(v[2]) / 3600.0
+        lat = _dms(gps["GPSLatitude"]); lon = _dms(gps["GPSLongitude"])
+        if str(gps.get("GPSLatitudeRef", "N")).upper() == "S":
+            lat = -lat
+        if str(gps.get("GPSLongitudeRef", "E")).upper() == "W":
+            lon = -lon
+        if not (-90 <= lat <= 90 and -180 <= lon <= 180):
+            return None
+        return (lat, lon)
+    except Exception:
+        return None
+
+
 @app.post("/posts/report")
 async def create_report_post(
     lat: Optional[float] = Form(None),
@@ -1029,12 +1306,20 @@ async def create_report_post(
             except: server_ip = "localhost"
         minio_port = minio_endpoint.split(":")[-1]
         external_host = f"http://{server_ip}:{minio_port}"
-        for fi in files:
-            import uuid
+        import uuid, io as _io
+        for idx, fi in enumerate(files):
+            data = await fi.read()
+            # 위치 미입력 시 첫 이미지 EXIF GPS로 자동 보완 (HTTP 환경 위치 누락 대응)
+            if lat is None and lon is None and idx == 0:
+                gps = _exif_gps(data)
+                if gps:
+                    lat, lon = gps
+                    logger.info(f"EXIF GPS 자동 적용: ({lat:.5f},{lon:.5f})")
             key = f"reports/{current_user['user_id']}/{uuid.uuid4()}_{fi.filename}"
             try:
                 app.state.minio.put_object(
-                    bucket, key, fi.file, length=-1, part_size=5 * 1024 * 1024
+                    bucket, key, _io.BytesIO(data), length=len(data),
+                    content_type=fi.content_type or "image/jpeg",
                 )
                 image_urls.append(f"{external_host}/{bucket}/{key}")
             except Exception as e:
@@ -1124,11 +1409,173 @@ async def create_report_post(
     xp_amount = calc_xp("report_created")
     total, _ = await grant_xp(db, app.state.redis, current_user["user_id"], xp_amount, "report_created",
                               ref_id=str(report_id), kafka=app.state.kafka, logger=logger)
+    new_badges = await check_and_award_badges(db, app.state.redis, current_user["user_id"],
+                                              kafka=app.state.kafka, logger=logger)
     await app.state.cache.invalidate("trending_feeds", prefix=True)
     await app.state.cache.invalidate("trending_users")
     await app.state.cache.track_activity("trending_feeds")
     await app.state.cache.track_activity("trending_users")
-    return {"success": True, "data": {"report_id": str(report_id), "xp_earned": xp_amount}}
+    return {"success": True, "data": {"report_id": str(report_id), "xp_earned": xp_amount, "new_badges": new_badges}}
+
+
+def _upload_image(fi, user_id: str, prefix: str):
+    """MinIO 업로드 후 외부 URL 반환 (없으면 None). /posts/report 패턴 재사용."""
+    if not (app.state.minio and fi):
+        return None
+    bucket = os.environ.get("MINIO_BUCKET_IMAGES", "plogging-images")
+    minio_endpoint = os.environ.get("MINIO_ENDPOINT", "localhost:9001")
+    server_ip = os.environ.get("SERVER_HOST", minio_endpoint.split(":")[0])
+    if server_ip in ("localhost", "127.0.0.1"):
+        import socket
+        try:
+            server_ip = socket.gethostbyname(socket.gethostname())
+        except Exception:
+            server_ip = "localhost"
+    minio_port = minio_endpoint.split(":")[-1]
+    import uuid as _uuid
+    key = f"{prefix}/{user_id}/{_uuid.uuid4()}_{fi.filename}"
+    try:
+        app.state.minio.put_object(bucket, key, fi.file, length=-1, part_size=5 * 1024 * 1024)
+        return f"http://{server_ip}:{minio_port}/{bucket}/{key}"
+    except Exception as e:
+        logger.warning(f"MinIO upload failed: {e}")
+        return None
+
+
+@app.post("/reports/{report_id}/cleanup")
+async def cleanup_report(
+    report_id: str,
+    after: UploadFile = File(...),
+    before: Optional[UploadFile] = File(None),
+    note: str = Form(""),
+    current_user: dict = Depends(get_current_user),
+):
+    """제보 수거 인증 — after 사진 업로드 → 완료 처리 + cleanup_verified XP (구역·주말 보너스)."""
+    db = app.state.db
+    rep = await db.fetchrow(
+        "SELECT id, status, zone_id FROM trash_reports WHERE id=$1::uuid", report_id)
+    if not rep:
+        return {"success": False, "error": "제보를 찾을 수 없습니다"}
+    if rep["status"] == "completed":
+        return {"success": False, "error": "이미 수거 완료된 제보입니다"}
+
+    after_url = _upload_image(after, current_user["user_id"], "cleanups")
+    before_url = _upload_image(before, current_user["user_id"], "cleanups") if before else None
+
+    mult = 1.0
+    if rep["zone_id"]:
+        z = await db.fetchval("SELECT bonus_multiplier FROM geofence_zones WHERE id=$1", rep["zone_id"])
+        if z:
+            mult = float(z)
+    pts = calc_xp("cleanup_verified", zone_bonus=mult)
+
+    async with db.acquire() as conn:
+        async with conn.transaction():
+            cleanup_id = await conn.fetchval("""
+                INSERT INTO cleanups
+                  (report_id, cleaner_id, cleaner_type, before_image, after_image, verified, points_awarded)
+                VALUES ($1::uuid, $2::uuid, 'human', $3, $4, TRUE, $5)
+                RETURNING id
+            """, report_id, current_user["user_id"], before_url, after_url, pts)
+            await conn.execute("UPDATE trash_reports SET status='completed' WHERE id=$1::uuid", report_id)
+
+    total, dup = await grant_xp(db, app.state.redis, current_user["user_id"], pts,
+                                "cleanup_verified", ref_id=str(cleanup_id),
+                                kafka=app.state.kafka, logger=logger)
+
+    # 수거 퀘스트 진행 갱신 + 시간 보너스(마감 전 빠를수록 ↑) + 완료 판정
+    quest_bonus, quest_title, quest_done = 0, None, False
+    qrow = await db.fetchrow("""
+        SELECT t.quest_id, q.title,
+            GREATEST(0, LEAST(1, EXTRACT(EPOCH FROM (q.end_date - NOW())) /
+                NULLIF(EXTRACT(EPOCH FROM (q.end_date - q.start_date)), 0))) AS frac
+        FROM quest_target_reports t
+        JOIN user_created_quests q ON q.id = t.quest_id
+        WHERE t.report_id = $1::uuid AND t.cleaned_at IS NULL
+          AND q.status = 'active' AND q.end_date > NOW()
+        LIMIT 1
+    """, report_id)
+    if qrow:
+        await db.execute("""UPDATE quest_target_reports SET cleaned_by=$1::uuid, cleaned_at=NOW()
+            WHERE quest_id=$2 AND report_id=$3::uuid""",
+            current_user["user_id"], qrow["quest_id"], report_id)
+        quest_title = qrow["title"]
+        quest_bonus = int(20 * float(qrow["frac"] or 0))
+        if quest_bonus:
+            await grant_xp(db, app.state.redis, current_user["user_id"], quest_bonus,
+                           "cleanup_quest_bonus", ref_id=str(cleanup_id),
+                           kafka=app.state.kafka, logger=logger)
+        remaining = await db.fetchval(
+            "SELECT COUNT(*) FROM quest_target_reports WHERE quest_id=$1 AND cleaned_at IS NULL",
+            qrow["quest_id"])
+        if remaining == 0:
+            await db.execute("UPDATE user_created_quests SET status='completed' WHERE id=$1", qrow["quest_id"])
+            quest_done = True
+            # 완료 보상: 수거 기여자 전원에게 reward_xp (quest_complete, ref_id=quest_id 멤버별 1회)
+            rxp = await db.fetchval("SELECT reward_xp FROM user_created_quests WHERE id=$1", qrow["quest_id"])
+            if rxp and int(rxp) > 0:
+                contributors = await db.fetch(
+                    "SELECT DISTINCT cleaned_by FROM quest_target_reports WHERE quest_id=$1 AND cleaned_by IS NOT NULL",
+                    qrow["quest_id"])
+                for cl in contributors:
+                    await grant_xp(db, app.state.redis, str(cl["cleaned_by"]), int(rxp),
+                                   "quest_complete", ref_id=str(qrow["quest_id"]),
+                                   kafka=app.state.kafka, logger=logger)
+
+    new_badges = await check_and_award_badges(db, app.state.redis, current_user["user_id"],
+                                              kafka=app.state.kafka, logger=logger)
+    await app.state.cache.invalidate("trending_users")
+    logger.info(f"Cleanup verified: report={report_id} by={current_user.get('username')} +{pts}XP")
+    return {"success": True, "data": {
+        "cleanup_id": str(cleanup_id), "report_id": report_id, "status": "completed",
+        "xp_earned": (0 if dup else pts) + quest_bonus, "new_badges": new_badges,
+        "quest_title": quest_title, "quest_bonus": quest_bonus, "quest_completed": quest_done}}
+
+
+@app.get("/admin/cleanups")
+async def admin_list_cleanups(current_user: dict = Depends(get_current_user)):
+    """관리자 사후검수 — 최근 수거 인증 목록(전후 사진 포함)."""
+    if current_user["role"] != "admin":
+        return {"success": False, "error": "관리자 권한 필요"}
+    rows = await app.state.db.fetch("""
+        SELECT c.id, c.report_id, u.username AS cleaner, c.before_image, c.after_image,
+               c.verified, c.points_awarded, c.completed_at,
+               tr.trash_type, tr.severity, tr.status AS report_status,
+               (tr.image_urls)[1] AS report_image
+        FROM cleanups c
+        LEFT JOIN users u ON u.id = c.cleaner_id
+        LEFT JOIN trash_reports tr ON tr.id = c.report_id
+        ORDER BY c.completed_at DESC LIMIT 50
+    """)
+    return {"success": True, "data": [dict(r) for r in rows]}
+
+
+@app.post("/admin/cleanups/{cleanup_id}/revoke")
+async def admin_revoke_cleanup(cleanup_id: str, current_user: dict = Depends(get_current_user)):
+    """수거 인증 철회 — 제보 status 복귀 + XP 회수."""
+    if current_user["role"] != "admin":
+        return {"success": False, "error": "관리자 권한 필요"}
+    db = app.state.db
+    c = await db.fetchrow(
+        "SELECT id, report_id, cleaner_id, points_awarded FROM cleanups WHERE id=$1::uuid", cleanup_id)
+    if not c:
+        return {"success": False, "error": "수거 기록을 찾을 수 없습니다"}
+    async with db.acquire() as conn:
+        async with conn.transaction():
+            await conn.execute("UPDATE cleanups SET verified=FALSE WHERE id=$1::uuid", cleanup_id)
+            await conn.execute("UPDATE trash_reports SET status='ai_verified' WHERE id=$1::uuid", c["report_id"])
+            if c["points_awarded"]:
+                await conn.execute("""
+                    INSERT INTO point_ledger (user_id, delta, reason, ref_id)
+                    VALUES ($1::uuid, $2, 'cleanup_revoked', $3::uuid)
+                    ON CONFLICT (user_id, ref_id, reason) DO NOTHING
+                """, c["cleaner_id"], -int(c["points_awarded"]), cleanup_id)
+    try:
+        await db.execute("REFRESH MATERIALIZED VIEW CONCURRENTLY user_points")
+    except Exception:
+        await db.execute("REFRESH MATERIALIZED VIEW user_points")
+    logger.warning(f"[cleanup-revoke] cleanup={cleanup_id} by={current_user.get('username')}")
+    return {"success": True, "data": {"cleanup_id": cleanup_id, "report_status": "ai_verified"}}
 
 
 def _with_level(d: dict) -> dict:
@@ -1144,6 +1591,7 @@ async def get_feed(
     zone_id: Optional[str] = Query(None),
     page: int = Query(1, ge=1),
     size: int = Query(20, le=50),
+    source: Optional[str] = Query(None, description="external_di → 데이터셋 제보 전용 탭. 기본 피드는 external_di 제외"),
     current_user: dict = Depends(get_optional_user),
 ):
     db = app.state.db
@@ -1171,12 +1619,18 @@ async def get_feed(
     # 숨김 필터: 관리자는 숨김 포함, 일반 사용자는 숨김 제외
     hidden_filter = "" if is_admin else " AND (p.is_hidden IS NOT TRUE)"
 
+    # 데이터셋(배치) 제보 필터: 기본 피드는 제외, source=external_di 전용 탭은 그것만
+    if source == "external_di":
+        dataset_filter = " AND tr.source = 'external_di'"
+    else:
+        dataset_filter = " AND (tr.source IS DISTINCT FROM 'external_di')"
+
     # visibility 필터: 비로그인=public만, 로그인=public+friends+본인private
     viewer_id = current_user["user_id"] if current_user else None
     if viewer_id:
-        vis_filter = " AND (p.visibility = 'public' OR p.visibility = 'friends' OR p.user_id = $%d::uuid)" + hidden_filter
+        vis_filter = " AND (p.visibility = 'public' OR p.visibility = 'friends' OR p.user_id = $%d::uuid)" + hidden_filter + dataset_filter
     else:
-        vis_filter = " AND p.visibility = 'public'" + hidden_filter
+        vis_filter = " AND p.visibility = 'public'" + hidden_filter + dataset_filter
 
     if zone_id:
         if viewer_id:

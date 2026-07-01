@@ -1,0 +1,246 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Meta SW 플로깅 — 데이터 제공 API 콘솔</title>
+<style>
+  :root{
+    --bg:#f7f5f2; --card:#ffffff; --ink:#1f2329; --muted:#6b7280; --line:#e7e2da;
+    --accent:#c0392b; --accent-2:#e74c3c; --accent-bg:rgba(192,57,43,.08);
+    --ok:#16a34a; --warn:#d97706; --err:#dc2626; --code-bg:#0f172a; --code-ink:#e2e8f0;
+    --radius:14px; --shadow:0 8px 30px rgba(60,40,30,.08);
+  }
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--bg);color:var(--ink);font-family:-apple-system,BlinkMacSystemFont,"Segoe UI","Noto Sans KR",sans-serif;line-height:1.6}
+  a{color:var(--accent);text-decoration:none}a:hover{text-decoration:underline}
+  .wrap{max-width:1080px;margin:0 auto;padding:28px 20px 80px}
+  header.hero{display:flex;align-items:center;gap:14px;flex-wrap:wrap;margin-bottom:6px}
+  header.hero h1{font-size:26px;font-weight:800;margin:0;letter-spacing:-.5px}
+  .badge{font-size:11px;font-weight:700;padding:3px 9px;border-radius:999px;background:var(--accent-bg);color:var(--accent)}
+  .badge.green{background:rgba(22,163,74,.1);color:var(--ok)}
+  .sub{color:var(--muted);font-size:14px;margin:2px 0 14px}
+  .pill{display:inline-block;font-family:ui-monospace,Menlo,monospace;font-size:12px;background:#efeae3;border:1px solid var(--line);border-radius:8px;padding:2px 8px}
+  .grid{display:grid;grid-template-columns:1.15fr .85fr;gap:18px;align-items:start}
+  @media(max-width:820px){.grid{grid-template-columns:1fr}}
+  .card{background:var(--card);border:1px solid var(--line);border-radius:var(--radius);box-shadow:var(--shadow);padding:18px 20px;margin-bottom:18px}
+  .card h2{font-size:15px;font-weight:800;margin:0 0 12px;display:flex;align-items:center;gap:8px}
+  label{display:block;font-size:12px;font-weight:600;color:var(--muted);margin:10px 0 4px}
+  input,select,textarea{width:100%;font-size:13px;padding:9px 11px;border:1px solid var(--line);border-radius:10px;background:#fff;color:var(--ink);outline:none;font-family:inherit;transition:border .15s,box-shadow .15s}
+  input:focus,select:focus,textarea:focus{border-color:var(--accent);box-shadow:0 0 0 3px var(--accent-bg)}
+  .row{display:flex;gap:10px;flex-wrap:wrap}.row>div{flex:1;min-width:120px}
+  .btn{display:inline-flex;align-items:center;gap:6px;border:none;border-radius:10px;padding:10px 18px;font-size:13px;font-weight:700;cursor:pointer;transition:all .15s}
+  .btn.run{background:var(--accent);color:#fff}.btn.run:hover{background:var(--accent-2);transform:translateY(-1px)}
+  .btn.run:disabled{opacity:.6;cursor:wait}
+  .btn.ghost{background:#f1ece5;color:var(--ink)}
+  .meth{font-family:ui-monospace,monospace;font-size:11px;font-weight:800;padding:2px 8px;border-radius:6px;background:rgba(22,163,74,.12);color:var(--ok)}
+  pre{background:var(--code-bg);color:var(--code-ink);border-radius:12px;padding:14px 16px;overflow:auto;font-size:12.5px;font-family:ui-monospace,Menlo,monospace;margin:8px 0;line-height:1.55}
+  .resp-meta{display:flex;gap:10px;align-items:center;font-size:12px;margin-bottom:6px;flex-wrap:wrap}
+  .dot{font-weight:800}.dot.ok{color:var(--ok)}.dot.err{color:var(--err)}
+  .ep{border:1px solid var(--line);border-radius:12px;padding:11px 13px;margin-bottom:9px;cursor:pointer;transition:all .15s}
+  .ep:hover{border-color:var(--accent);background:var(--accent-bg)}
+  .ep.active{border-color:var(--accent);background:var(--accent-bg);box-shadow:0 0 0 2px var(--accent-bg)}
+  .ep .path{font-family:ui-monospace,monospace;font-size:13px;font-weight:700}
+  .ep .scope{font-size:11px;color:var(--muted)}.ep .desc{font-size:12.5px;color:var(--muted);margin-top:3px}
+  .ep mark{background:#fde68a;color:inherit;border-radius:3px;padding:0 1px}
+  .step{display:flex;gap:10px;margin-bottom:8px;font-size:13px}
+  .step .n{flex:0 0 22px;height:22px;border-radius:50%;background:var(--accent);color:#fff;font-size:11px;font-weight:800;display:flex;align-items:center;justify-content:center}
+  .hint{font-size:11.5px;color:var(--muted);margin-top:6px}
+  .links a{display:inline-block;font-size:12px;font-weight:600;margin-right:14px}
+  hr{border:none;border-top:1px solid var(--line);margin:18px 0}
+  .search{position:relative}
+  .search .ico{position:absolute;left:12px;top:50%;transform:translateY(-50%);color:var(--muted);font-size:14px;pointer-events:none}
+  .search input{padding-left:34px}
+  .empty{font-size:12px;color:var(--muted);padding:8px 2px}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header class="hero">
+    <h1>🌿 Meta SW 플로깅 — 데이터 제공 API</h1>
+    <span class="badge">v1.0.0</span><span class="badge green">OAS 3.1</span>
+  </header>
+  <div class="sub">제보·외부 데이터셋 공개 제공 API · 라이선스 <b>CC-BY-4.0</b> · <span id="baseUrl" class="pill"></span></div>
+  <div class="links" style="margin-bottom:18px">
+    <a id="lnk-swagger" target="_blank">📘 Swagger</a>
+    <a id="lnk-redoc" target="_blank">📕 ReDoc</a>
+    <a id="lnk-openapi" target="_blank">{ } openapi.json</a>
+  </div>
+
+  <div class="grid">
+    <!-- 좌: 인터랙티브 테스터 -->
+    <div>
+      <div class="card">
+        <h2>⚡ 인터랙티브 테스터 <span class="hint" style="margin-left:auto">실제 서버에 요청</span></h2>
+
+        <label>API 검색 — 경로·설명으로 찾기 (자동완성)</label>
+        <div class="search">
+          <span class="ico">🔎</span>
+          <input id="epSearch" list="epList" placeholder="예: reports, datasets, catalog, 제보, 통계…"
+                 autocomplete="off" oninput="onEpSearch()">
+          <datalist id="epList"></datalist>
+        </div>
+
+        <label>API Key (X-API-Key) — 발급키 입력</label>
+        <input id="apikey" placeholder="mfk_live_xxxxxxxx (catalog/reports 호출에 필요)" autocomplete="off">
+
+        <div id="params"></div>
+
+        <div style="display:flex;gap:10px;margin-top:14px">
+          <button class="btn run" id="runBtn" onclick="runRequest()">▶ 실행</button>
+          <button class="btn ghost" onclick="copyCurl()">⧉ curl 복사</button>
+        </div>
+        <hr>
+        <div class="resp-meta" id="respMeta" style="display:none"></div>
+        <pre id="curlOut" style="display:none"></pre>
+        <pre id="respOut" style="display:none"></pre>
+      </div>
+    </div>
+
+    <!-- 우: 검색 가능한 엔드포인트 목록 + 빠른시작 -->
+    <div>
+      <div class="card">
+        <h2>📚 엔드포인트 <span class="hint" style="margin-left:auto">클릭하면 테스터에 로드</span></h2>
+        <div class="search" style="margin-bottom:10px">
+          <span class="ico">🔎</span>
+          <input id="refSearch" placeholder="엔드포인트 검색 (경로/스코프/설명)" autocomplete="off" oninput="renderRef()">
+        </div>
+        <div id="epRef"></div>
+      </div>
+      <div class="card">
+        <h2>🚀 빠른 시작</h2>
+        <div class="step"><div class="n">1</div><div><b>상태 점검</b> — <span class="pill">/health</span> 검색·선택 후 ▶실행 (키 불필요).</div></div>
+        <div class="step"><div class="n">2</div><div><b>API Key 발급</b> — 로그인 → 프로필 <b>"데이터 활용 API 신청"</b> → 관리자 승인 시 평문 키 1회.</div></div>
+        <div class="step"><div class="n">3</div><div><b>호출</b> — 발급키 입력 후 엔드포인트 검색·선택·실행.</div></div>
+        <div class="hint">스코프: read:reports / read:datasets / read:stats · 증분 <span class="pill">updated_since</span>.</div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+const API_BASE = location.origin + '/api/data';
+document.getElementById('baseUrl').textContent = API_BASE;
+document.getElementById('lnk-swagger').href = API_BASE + '/docs';
+document.getElementById('lnk-redoc').href = API_BASE + '/redoc';
+document.getElementById('lnk-openapi').href = API_BASE + '/openapi.json';
+
+// 자동완성 후보
+const ZONES = [['KU_CAMPUS','군산대학교'],['EUNPA','은파유원지'],['SAEMANGEUM','새만금'],['GEUMGANG','금강하구둑']];
+const BATCHES = ['2026-06-01-di-full','2026-06-01-di-verify10'];
+
+const ENDPOINTS = [
+  {id:'health', method:'GET', path:'/health', scope:'(공개)', desc:'서비스 상태 점검 (인증 불필요)', kw:'상태 헬스 health 점검', params:[]},
+  {id:'reports', method:'GET', path:'/api/v1/reports', scope:'read:reports',
+   desc:'제보 데이터 제공 (전량/증분, GeoJSON·JSON)', kw:'제보 reports 데이터 geojson 증분', params:[
+     {name:'format', kind:'select', opts:['geojson','json'], def:'geojson'},
+     {name:'zone', kind:'auto', list:'dl-zone', ph:'구역 키 (자동완성)'},
+     {name:'bbox', kind:'text', ph:'minLon,minLat,maxLon,maxLat'},
+     {name:'updated_since', kind:'text', ph:'2026-06-01T00:00:00 (증분)'},
+     {name:'size', kind:'number', def:'20'},
+   ]},
+  {id:'datasets', method:'GET', path:'/api/v1/datasets/{batch_id}', scope:'read:datasets',
+   desc:'외부 데이터셋 배치 단위 제공', kw:'데이터셋 datasets 배치 batch', pathParams:[{name:'batch_id', list:'dl-batch', ph:'배치 ID (자동완성)'}], params:[
+     {name:'format', kind:'select', opts:['geojson','json'], def:'geojson'},
+   ]},
+  {id:'catalog', method:'GET', path:'/api/v1/catalog', scope:'(키 필요)',
+   desc:'엔드포인트·내 스코프 요약', kw:'카탈로그 catalog 목록 스코프', params:[]},
+];
+let CUR = ENDPOINTS[0];
+
+// datalist (자동완성 소스) 주입
+document.body.insertAdjacentHTML('beforeend',
+  `<datalist id="dl-zone">${ZONES.map(z=>`<option value="${z[0]}">${z[1]}</option>`).join('')}</datalist>
+   <datalist id="dl-batch">${BATCHES.map(b=>`<option value="${b}">`).join('')}</datalist>`);
+
+// 엔드포인트 검색 datalist
+document.getElementById('epList').innerHTML =
+  ENDPOINTS.map(e=>`<option value="${e.method} ${e.path}">${e.desc}</option>`).join('');
+
+function onEpSearch(){
+  const v = document.getElementById('epSearch').value.trim().toLowerCase();
+  // 정확/부분 매칭 → 첫 매칭 선택
+  let hit = ENDPOINTS.find(e => (e.method+' '+e.path).toLowerCase() === v);
+  if(!hit) hit = ENDPOINTS.find(e => (e.path+' '+e.kw+' '+e.desc).toLowerCase().includes(v));
+  if(hit && hit.id !== CUR.id) selectEndpoint(hit.id, false);
+  // 우측 목록도 같은 검색어로 필터
+  document.getElementById('refSearch').value = document.getElementById('epSearch').value;
+  renderRef();
+}
+
+function selectEndpoint(id, syncSearch=true){
+  CUR = ENDPOINTS.find(e=>e.id===id) || ENDPOINTS[0];
+  if(syncSearch){ document.getElementById('epSearch').value = `${CUR.method} ${CUR.path}`; }
+  renderParams(); renderRef();
+}
+
+function renderParams(){
+  const e = CUR; let html = `<label>선택된 엔드포인트</label>
+    <div class="pill" style="display:block;padding:8px 10px"><b>${e.method}</b> ${e.path} <span style="color:var(--muted)">· ${e.scope}</span></div>`;
+  (e.pathParams||[]).forEach(p=>{
+    html += `<label>${p.name} <span style="color:var(--accent)">*경로</span></label>
+      <input data-path="${p.name}" list="${p.list||''}" placeholder="${p.ph||''}" autocomplete="off">`;
+  });
+  if(e.params.length){
+    html += '<label>쿼리 파라미터</label><div class="row">';
+    e.params.forEach(p=>{
+      if(p.kind==='select')
+        html += `<div><div class="hint">${p.name}</div><select data-q="${p.name}">${p.opts.map(o=>`<option ${o===p.def?'selected':''}>${o}</option>`).join('')}</select></div>`;
+      else
+        html += `<div><div class="hint">${p.name}</div><input data-q="${p.name}" ${p.kind==='auto'?`list="${p.list}"`:''} type="${p.kind==='number'?'number':'text'}" value="${p.def||''}" placeholder="${p.ph||''}" autocomplete="off"></div>`;
+    });
+    html += '</div>';
+  }
+  document.getElementById('params').innerHTML = html;
+}
+
+function hl(text, q){ if(!q) return text; try{ return text.replace(new RegExp('('+q.replace(/[.*+?^${}()|[\]\\]/g,'\\$&')+')','ig'),'<mark>$1</mark>'); }catch(e){ return text; } }
+function renderRef(){
+  const q = document.getElementById('refSearch').value.trim().toLowerCase();
+  const list = ENDPOINTS.filter(e => !q || (e.path+' '+e.scope+' '+e.kw+' '+e.desc).toLowerCase().includes(q));
+  const el = document.getElementById('epRef');
+  if(!list.length){ el.innerHTML = '<div class="empty">검색 결과 없음</div>'; return; }
+  el.innerHTML = list.map(e=>`<div class="ep ${e.id===CUR.id?'active':''}" onclick="selectEndpoint('${e.id}')">
+    <div><span class="meth">${e.method}</span> <span class="path">${hl(e.path,q)}</span></div>
+    <div class="scope">scope: ${e.scope}</div><div class="desc">${hl(e.desc,q)}</div></div>`).join('');
+}
+
+function buildUrl(){
+  const e = CUR; let path = e.path;
+  document.querySelectorAll('[data-path]').forEach(i=> path = path.replace('{'+i.dataset.path+'}', encodeURIComponent(i.value||'')));
+  const qs = [];
+  document.querySelectorAll('[data-q]').forEach(i=>{ if(i.value!=='') qs.push(`${i.dataset.q}=${encodeURIComponent(i.value)}`); });
+  return API_BASE + path + (qs.length?('?'+qs.join('&')):'');
+}
+function buildCurl(){
+  const e = CUR, url = buildUrl(), key = document.getElementById('apikey').value.trim();
+  return `curl ${e.id!=='health'&&key?`-H "X-API-Key: ${key}" `:''}"${url}"`;
+}
+function copyCurl(){ const c=buildCurl(); navigator.clipboard?.writeText(c); const el=document.getElementById('curlOut'); el.style.display='block'; el.textContent=c; }
+
+async function runRequest(){
+  const e = CUR, url = buildUrl(), key = document.getElementById('apikey').value.trim();
+  const btn=document.getElementById('runBtn'); btn.disabled=true; btn.textContent='요청 중...';
+  const meta=document.getElementById('respMeta'), out=document.getElementById('respOut'), curlEl=document.getElementById('curlOut');
+  curlEl.style.display='block'; curlEl.textContent=buildCurl();
+  const t0=performance.now();
+  try{
+    const headers={}; if(e.id!=='health' && key) headers['X-API-Key']=key;
+    const r=await fetch(url,{headers});
+    const ms=Math.round(performance.now()-t0);
+    const ct=r.headers.get('content-type')||'';
+    const body = ct.includes('json') ? JSON.stringify(await r.json(),null,2) : await r.text();
+    meta.style.display='flex';
+    meta.innerHTML=`<span class="dot ${r.ok?'ok':'err'}">●</span> <b>HTTP ${r.status}</b> <span style="color:var(--muted)">${r.statusText||''}</span> <span class="pill">${ms} ms</span> <span class="pill">${(body.length/1024).toFixed(1)} KB</span>`;
+    out.style.display='block'; out.textContent = body.length>20000 ? body.slice(0,20000)+'\n… (생략)' : body;
+  }catch(err){
+    meta.style.display='flex'; meta.innerHTML=`<span class="dot err">●</span> <b>요청 실패</b> <span style="color:var(--muted)">${err.message}</span>`;
+    out.style.display='block'; out.textContent='네트워크 오류 또는 CORS 차단. 키/엔드포인트를 확인하세요.';
+  }finally{ btn.disabled=false; btn.textContent='▶ 실행'; }
+}
+
+// 초기 렌더
+selectEndpoint('health');
+</script>
+</body>
+</html>

@@ -2,7 +2,7 @@
 
 > **프로젝트**: 메타 SW 플로깅 플랫폼 — TrashHunt
 > **기관**: 군산대학교 / 전북특별자치도 군산시
-> **버전**: v0.0.7
+> **버전**: v0.2.0
 > **대상 구역**: 군산대학교 캠퍼스 · 은파유원지 · 새만금 · 금강하구둑
 
 ---
@@ -466,6 +466,12 @@ SNS_PORT=8501
 | v0.0.8 | 2026-05-21 | 시스템 메시지 DM/알림 분리(퀘스트 초대→notifications), Gemini API 이모지 추천(gemini-flash-latest+키워드 폴백), 모니터링 차트 SVG 개선(그리드/평균선/툴팁), 타임라인 댓글 ID 충돌 수정, 알림 뱃지 갱신 버그 수정, 알림 목록 페이지 신설, 글쓰기 통합(플로그/퀘스트 위치 선택+참여 퀘스트 드롭다운) |
 | v0.0.9 | 2026-05-21 | 스크롤 맨 위로(활성 탭/로고 재클릭+우측 하단 ↑ FAB), 알림 진입점 영구화(상단 종 SVG 아이콘+빨간 점/9+ 카운트, 인스타 ❤️ 스타일), 알림 페이지 인스타화(진입 시 자동 일괄 읽음, 날짜별 그룹화: 오늘/어제/이번 주/이전, 타입별 컬러 아이콘 뱃지, 모바일 더보기 메뉴에 알림 항목), 좋아요 받음 알림(reaction 타입+like_received +2 XP, 게시글당 1회·어뷰징 방지) |
 | v0.0.10 | 2026-05-22 | 멘션 드롭다운 키보드 네비(↑↓/Enter/Tab/Esc + scrollIntoView), XP 시스템 종합 보완(comment_created +3 일일 5회한도/comment_received +3 게시글당 1회/zone_fix ref_id 어뷰징차단/admin 댓글 XP 면제/데드 reason 정리), 트렌드 차트 4종 XP 기반 통합(받은 engagement_xp×24/(24+h) 시간 decay·idx_ledger_ref_reason 인덱스), 게시글 수정 시 이미지 추가/삭제 지원(PUT image_urls·❌ 미리보기 삭제 버튼·업로드 실패 명시 알림), admin 게시글 트렌드 노출(🛡️ 운영 배지·랭커는 제외 유지), 트렌드 점수 투명화(섹션 헤더 ℹ️ 공식·각 카드 🔥 점수 칩 호버 분해), 트렌드 segmented 필터(전체/💬일반/📢제보 캐시 키 분리), UI modernization(크림슨 통일·테두리/그림자 제거 flat·메달+점수 가로 배치·border-radius 14px 통일·hover 미세 톤만) |
+| v0.0.10a | 2026-05-28 | 컴포즈 모달 스크롤 수정(max-height:90vh;overflow-y:auto — 제보 시 제출 버튼 접근 불가 해결), DB 자동 백업 스크립트(asyncpg+gzip, 매일 새벽 2시 cron, 30일 보관) |
+| v0.0.11a | 2026-06-01 | 지오펜스 좌표 정합성 보정 — KU_CAMPUS(군산대학교) 폴리곤이 실제 캠퍼스(대학로 558, 미룡동 ≈126.682,35.945)에서 약 5km 북동(126.737)의 임의 공간에 찍혀 있던 오류 수정, EUNPA 원위치 복원(비겹침), 전체 제보 zone 재매칭(DI 1033건→군산대학교), seed.sql 좌표 영구 수정 |
+| v0.2.0 | 2026-06-30 | **게이미피케이션 완성** — ① 개인 수거 인증 루프(핀 "내가 치웠어요"→after 사진 인증→제보 완료 처리+cleanup_verified +50XP, 구역·주말 보너스, 관리자 사후검수 철회/XP회수), ② 수거 퀘스트(구역별 대기 제보 임계초과 시 6h 스케줄러 자동 생성, 제한시간·진행도·마감 전 빠를수록 시간보너스 cleanup_quest_bonus, 탐색 탭 '수거 작전' 카드 카운트다운/진행바/치우러가기), ③ 퀘스트 완료 보상(POST /quests/{id}/complete → 멤버 전원 quest_complete +reward_xp, 수거 퀘스트 완료 시 기여자 분배), ④ 시스템 배지 자동수여(업적 — 제보수/청소수/구역별/레벨 기준 충족 시 user_badges INSERT + 희귀도별 badge_earn XP), ⑤ EXIF GPS 자동 추출(업로드 사진 GPS로 위치 보완, HTTP 위치 누락 대응). **지도 개편** — 핀 자동 줌(fitBounds)+'제보 위치로' 컨트롤, 핀 상한 UI 입력(200→최대 5000), 외부 데이터셋 표시 토글(include_external) + 전용 보기 모달(전체 사용자), 핀 팝업 폭/링크 버튼 정리(오버플로 수정), 상태 색상 배지, **loadZones TDZ 크래시 수정**(typeNames 선언순서 — 현황/제보/지도 핀 전부 미표시 해결). **API 개발자 도구** — 인터랙티브 API 콘솔(/api-console, 엔드포인트 검색 자동완성·실시간 테스터·curl 생성·구역키/배치ID 자동완성), FastAPI Swagger/ReDoc 노출(게이트웨이 비-JSON 패스스루+root_path, OpenAPI 가이드·X-API-Key 보안스킴·태그), 관리자 'API' 통계 탭(신청/발급/사용 현황·키 폐기). **관리자** — 전체 퀘스트 보기(/admin/quests, 멤버십 무관). **운영** — systemd 영구 구동(9개 서비스 유저 유닛, linger·자동재시작·세션 독립), 쓰레기 분류 사전 '로딩중' 고착 수정. **문서** — 산학협력 활용방안(docs/industry), ADR, 세션 26~29 |
+| v0.1.0 | 2026-06-24 | 데이터 활용 API Key 플랫폼(신청→관리자 승인→발급, sha256 해시 저장·평문 1회·스코프·시간당 rate-limit·사용 감사 — api_key_requests/api_keys/api_key_usage), 외부 제공 API /api/v1/reports(전량+증분 updated_since·zone/bbox·GeoJSON/JSON)·/datasets/{batch_id}·/catalog(+OpenAPI), 지도 핀→연결 게시글 이동, 중복 핀 제거(report/post 이중표시) + 더미 핀(aihub/picsum) 119건 하드삭제, 외부데이터셋 관리자 페이지 강화(배치 상세·썸네일·분포·롤백·데이터셋 목록), 미구현 기능 폐기(드론/데이터에이전트/AIHub시뮬·죽은 라우트), ADR-003/004 (외부데이터셋 적재·데이터 제공 API). NAS 배포 Docker 1단계(data/ws/policy 서비스 추가+프록시 배선) |
+| v0.0.12 | 2026-06-24 | Docker 컨테이너화 인프라 추가 — 6-Layer 전체 스택 docker-compose(gateway/sns/game/gis/ai/mcp + postgres/redis/kafka/zookeeper/minio + elasticsearch profile=search), python:3.11-slim 멀티스테이지 Dockerfile(서비스별 CMD 분기), .env.docker.example 환경변수 템플릿+통합 requirements.txt+.dockerignore, DOCKER.md 빌드/배포 가이드, .gitignore 대용량 데이터셋·db_backup·avatars·worktrees 제외 규칙. 외부 데이터셋 적재 ADR-003 문서화 + dataset-ingest 서브에이전트 정의 추가. 서비스 코드 변경 없음(인프라/문서 전용) |
+| v0.0.11 | 2026-06-01 | 외부 DI 데이터셋 배치 적재(1035건, merged_records.json 정답라벨+좌표, SHA-256 멱등), 다축 쓰레기 분류체계(품목 9종/크기/수거구분 handling/긴급성 자동산출 — trash_taxonomy.py SSOT), 신규 카테고리 6종(담배꽁초·종이·비닐·캔금속·유리·스티로폼)+report_categories 테이블+gt_label jsonb, 내부 적재 API(/admin/reports/ingest·ingest-batch, 업로드/URL 참조 모드, shared/core/ingest.py), dataset_bot 시스템계정, 배치 제보 메인피드 제외+전용 탭(/feed?source=external_di), 현황 카테고리 동적화+제보 사진 썸네일(GIS pins image_urls), 관리자 데이터셋 탭(배치 진행/통계), 도움말 쓰레기 분류 사전, 댓글 멘션 작성자 자동완성 수정, EUNPA 구역 서편 확장(은파호수 일대 포함) |
 
 ---
 

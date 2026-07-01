@@ -30,12 +30,9 @@ SERVICE_MAP = {
     "ai": os.environ.get("AI_SERVICE_URL", f"http://127.0.0.1:8504"),
     "data": os.environ.get("DATA_SERVICE_URL", f"http://127.0.0.1:8505"),
     "mcp": os.environ.get("MCP_SERVER_URL", f"http://127.0.0.1:8510").replace("/sse", ""),
-    "ws": f"http://127.0.0.1:{os.environ.get('WS_PORT', 8520)}",
-    "drone": f"http://127.0.0.1:{os.environ.get('DRONE_AGENT_PORT', 8531)}",
-    "data-agent": f"http://127.0.0.1:{os.environ.get('DATA_AGENT_PORT', 8532)}",
-    "mobility": f"http://127.0.0.1:{os.environ.get('MOBILITY_AGENT_PORT', 8533)}",
-    "quest": f"http://127.0.0.1:{os.environ.get('QUEST_AGENT_PORT', 8540)}",
-    "policy": f"http://127.0.0.1:{os.environ.get('POLICY_PORT', 8541)}",
+    "ws": os.environ.get("WS_SERVICE_URL", f"http://127.0.0.1:{os.environ.get('WS_PORT', 8520)}"),
+    # [폐기] drone/data-agent/mobility/quest — 해당 services/ 디렉토리 부재(미구현 죽은 라우트)
+    "policy": os.environ.get("POLICY_SERVICE_URL", f"http://127.0.0.1:{os.environ.get('POLICY_PORT', 8541)}"),
 }
 
 app = FastAPI(title="Meta SW Plogging Gateway", version="1.0.0")
@@ -89,6 +86,15 @@ async def admin_index():
     return HTMLResponse("<h1>Admin</h1><p>apps/admin/index.html not found</p>", status_code=404)
 
 
+@app.get("/api-console", response_class=HTMLResponse)
+async def api_console():
+    """데이터 제공 API 인터랙티브 콘솔 (테마 + 실시간 테스터)."""
+    path = os.path.join(APPS_DIR, "web", "api-console.html")
+    if os.path.exists(path):
+        return FileResponse(path, media_type="text/html")
+    return HTMLResponse("<h1>API Console</h1><p>api-console.html not found</p>", status_code=404)
+
+
 # ── 아바타 정적 파일 ──
 
 
@@ -136,14 +142,10 @@ async def proxy(service: str, path: str, request: Request):
             return JSONResponse(content=resp.json(), status_code=resp.status_code,
                                 headers={"Cache-Control": "no-cache, no-store", "Pragma": "no-cache"})
         else:
-            # JSON이 아닌 응답 (에러 HTML 등)
-            try:
-                return JSONResponse(content=resp.json(), status_code=resp.status_code)
-            except Exception:
-                return JSONResponse(
-                    content={"error": resp.text[:500] if resp.text else "Backend error", "status": resp.status_code},
-                    status_code=resp.status_code,
-                )
+            # JSON이 아닌 응답 (Swagger/ReDoc HTML, 텍스트 등) — 원본 그대로 통과
+            from starlette.responses import Response
+            return Response(content=resp.content, status_code=resp.status_code,
+                            media_type=ct or "application/octet-stream")
     except httpx.TimeoutException:
         return JSONResponse({"error": "Backend service timeout"}, status_code=504)
     except httpx.ConnectError:

@@ -1,0 +1,11 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(python3 -c \"import json; d=json.load\\(open\\('/home/spark/.claude/settings.json'\\)\\); print\\('JSON valid. remoteControlAtStartup =', d.get\\('remoteControlAtStartup'\\)\\)\")",
+      "Bash(echo \"exit: $?\")"
+    ],
+    "additionalDirectories": [
+      "/home/spark/.claude"
+    ]
+  }
+}

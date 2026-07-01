@@ -77,9 +77,28 @@ async def lifespan(app: FastAPI):
     task = asyncio.create_task(consumer.consume_loop(sync_ranking, dict, stop))
     app.state.stop = stop
     app.state.task = task
+
+    # 수거 퀘스트 자동 생성 스케줄러 (6시간 주기) + 만료 마감
+    async def _cleanup_quest_loop():
+        await asyncio.sleep(30)  # 기동 직후 1회
+        while not stop.is_set():
+            try:
+                n = await _generate_cleanup_quests(app.state.db)
+                await _expire_cleanup_quests(app.state.db)
+                if n:
+                    logger.info(f"[cleanup-quest] 자동 생성 {n}건")
+            except Exception as e:
+                logger.warning(f"[cleanup-quest] 스케줄러 오류: {e}")
+            for _ in range(6 * 60):  # 6시간, 1분 단위로 stop 확인
+                if stop.is_set():
+                    break
+                await asyncio.sleep(60)
+    app.state.cq_task = asyncio.create_task(_cleanup_quest_loop())
+
     yield
     stop.set()
     await task
+    app.state.cq_task.cancel()
     consumer.close()
     await app.state.db.close()
     await app.state.redis.aclose()
@@ -531,6 +550,26 @@ async def my_quests_user(u: dict = Depends(get_current_user)):
     return {"success": True, "data": [dict(r) for r in rows]}
 
 
+@app.get("/admin/quests")
+async def admin_all_quests(u: dict = Depends(get_current_user)):
+    """관리자 전체 퀘스트 보기 — 멤버십 무관 모든 퀘스트."""
+    if u.get("role") != "admin":
+        return {"success": False, "error": "관리자 권한 필요"}
+    rows = await app.state.db.fetch("""
+        SELECT q.id, q.title, q.description, q.quest_type, q.status,
+               q.member_count, q.reward_xp, q.is_public, q.is_cleanup,
+               q.start_date, q.end_date, q.created_at,
+               u.username AS creator_username, u.display_name AS creator_name
+        FROM user_created_quests q
+        LEFT JOIN users u ON u.id = q.creator_id
+        ORDER BY q.created_at DESC
+    """)
+    out = []
+    for r in rows:
+        d = dict(r); d["id"] = str(d["id"]); out.append(d)
+    return {"success": True, "data": out}
+
+
 @app.get("/quests/{quest_id}")
 async def quest_detail(quest_id: str, u: dict | None = Depends(get_optional_user)):
     db = app.state.db
@@ -630,6 +669,33 @@ async def invite_to_quest(quest_id: str, payload: dict = Body(...), u: dict = De
         except Exception:
             pass
     return {"success": True, "data": {"invited": invited, "count": len(invited)}}
+
+
+@app.post("/quests/{quest_id}/complete")
+async def complete_quest(quest_id: str, u: dict = Depends(get_current_user)):
+    """주최자/관리자가 퀘스트 완료 처리 → 참여 멤버 전원에게 reward_xp 지급 (quest_complete)."""
+    db = app.state.db
+    q = await db.fetchrow(
+        "SELECT id, creator_id, status, reward_xp, title FROM user_created_quests WHERE id=$1::uuid",
+        quest_id)
+    if not q:
+        return {"success": False, "error": "퀘스트를 찾을 수 없습니다"}
+    if str(q["creator_id"]) != u["user_id"] and u.get("role") != "admin":
+        return {"success": False, "error": "주최자만 완료할 수 있습니다"}
+    if q["status"] == "completed":
+        return {"success": False, "error": "이미 완료된 퀘스트입니다"}
+    await db.execute("UPDATE user_created_quests SET status='completed' WHERE id=$1::uuid", quest_id)
+    granted, rxp = 0, int(q["reward_xp"] or 0)
+    if rxp > 0:
+        members = await db.fetch(
+            "SELECT user_id FROM quest_members WHERE quest_id=$1::uuid AND status='accepted'", quest_id)
+        for mb in members:
+            _, dup = await grant_xp(db, app.state.redis, str(mb["user_id"]), rxp,
+                                    "quest_complete", ref_id=quest_id, kafka=None, logger=logger)
+            if not dup:
+                granted += 1
+    logger.info(f"Quest completed: {quest_id} reward={rxp} granted={granted}")
+    return {"success": True, "data": {"quest_id": quest_id, "reward_xp": rxp, "granted": granted}}
 
 
 @app.get("/quests/{quest_id}/members")
@@ -1206,6 +1272,129 @@ async def admin_xp_stats(u: dict = Depends(get_current_user)):
             "daily": [dict(r) for r in daily],
         },
     }
+
+
+# ═══════════════════════════════════════════════════════════
+# 수거 퀘스트 (Phase 2) — 구역별 대기 제보 묶음, 제한시간, 시간보너스
+# ═══════════════════════════════════════════════════════════
+CLEANUP_THRESHOLD = int(os.environ.get("CLEANUP_QUEST_THRESHOLD", 5))   # 구역당 임계 제보수
+CLEANUP_WINDOW_DAYS = int(os.environ.get("CLEANUP_QUEST_DAYS", 3))      # 마감 기한(일)
+CLEANUP_MAX_TARGETS = 20
+
+_UNCLAIMED = """tr.status IN ('pending','ai_verified') AND tr.location IS NOT NULL
+    AND tr.source <> 'external_di'
+    AND NOT EXISTS (SELECT 1 FROM quest_target_reports q2
+        JOIN user_created_quests uq2 ON uq2.id=q2.quest_id
+        WHERE q2.report_id=tr.id AND uq2.status='active')"""
+
+
+async def _generate_cleanup_quests(db) -> int:
+    """구역별 미수거 제보가 임계 이상이면 수거 퀘스트 자동 생성."""
+    sys_user = await db.fetchval("SELECT id FROM users WHERE username='dataset_bot' LIMIT 1") \
+        or await db.fetchval("SELECT id FROM users WHERE role='admin' ORDER BY created_at LIMIT 1")
+    if not sys_user:
+        return 0
+    zones = await db.fetch(f"""
+        SELECT gz.id AS zone_id, gz.name, COUNT(tr.id) AS cnt
+        FROM geofence_zones gz JOIN trash_reports tr ON tr.zone_id=gz.id
+        WHERE {_UNCLAIMED} AND gz.is_active=TRUE
+        GROUP BY gz.id, gz.name HAVING COUNT(tr.id) >= $1
+    """, CLEANUP_THRESHOLD)
+    created = 0
+    for z in zones:
+        reps = await db.fetch(f"""
+            SELECT tr.id FROM trash_reports tr
+            WHERE tr.zone_id=$1 AND {_UNCLAIMED}
+            ORDER BY tr.created_at ASC LIMIT $2
+        """, z["zone_id"], CLEANUP_MAX_TARGETS)
+        if not reps:
+            continue
+        target = len(reps)
+        async with db.acquire() as conn:
+            async with conn.transaction():
+                qid = await conn.fetchval(f"""
+                    INSERT INTO user_created_quests
+                      (title, description, quest_type, creator_id, zone_id, target_count,
+                       max_members, start_date, end_date, reward_xp, is_public, status,
+                       is_cleanup, auto_generated)
+                    VALUES ($1,$2,'cleanup',$3,$4,$5,200,NOW(),
+                            NOW() + ($6 || ' days')::interval, $7, TRUE, 'active', TRUE, TRUE)
+                    RETURNING id
+                """, f"🧹 {z['name']} 수거 작전", f"{z['name']}에 방치된 쓰레기 {target}건을 제한시간 안에 치워주세요!",
+                     sys_user, z["zone_id"], target, str(CLEANUP_WINDOW_DAYS), 100)
+                await conn.execute("""INSERT INTO quest_members(quest_id,user_id,role,status)
+                    VALUES($1,$2,'host','accepted') ON CONFLICT DO NOTHING""", qid, sys_user)
+                for r in reps:
+                    await conn.execute("""INSERT INTO quest_target_reports(quest_id,report_id)
+                        VALUES($1,$2) ON CONFLICT DO NOTHING""", qid, r["id"])
+        created += 1
+    return created
+
+
+async def _expire_cleanup_quests(db):
+    """마감 지난 수거 퀘스트를 closed 처리."""
+    await db.execute("""UPDATE user_created_quests SET status='closed'
+        WHERE is_cleanup=TRUE AND status='active' AND end_date < NOW()""")
+
+
+@app.get("/cleanup-quests")
+async def list_cleanup_quests(u: dict | None = Depends(get_optional_user)):
+    """진행 중 수거 퀘스트 목록 + 진행도/마감."""
+    rows = await app.state.db.fetch("""
+        SELECT q.id, q.title, q.description, q.zone_id, gz.name AS zone_name,
+               q.target_count, q.reward_xp, q.start_date, q.end_date, q.status,
+               (SELECT COUNT(*) FROM quest_target_reports t WHERE t.quest_id=q.id AND t.cleaned_at IS NOT NULL) AS cleaned
+        FROM user_created_quests q
+        LEFT JOIN geofence_zones gz ON gz.id=q.zone_id
+        WHERE q.is_cleanup=TRUE AND q.status='active'
+        ORDER BY q.end_date ASC
+    """)
+    out = []
+    for r in rows:
+        d = dict(r)
+        for k in ("id", "zone_id"):
+            if d.get(k) is not None:
+                d[k] = str(d[k])
+        out.append(d)
+    return {"success": True, "data": out}
+
+
+@app.get("/cleanup-quests/{quest_id}")
+async def cleanup_quest_detail(quest_id: str, u: dict | None = Depends(get_optional_user)):
+    """수거 퀘스트 상세 — 대상 제보 목록(수거 여부 포함)."""
+    db = app.state.db
+    q = await db.fetchrow("""
+        SELECT q.id, q.title, q.description, gz.name AS zone_name, q.target_count,
+               q.reward_xp, q.start_date, q.end_date, q.status
+        FROM user_created_quests q LEFT JOIN geofence_zones gz ON gz.id=q.zone_id
+        WHERE q.id=$1::uuid AND q.is_cleanup=TRUE
+    """, quest_id)
+    if not q:
+        return {"success": False, "error": "수거 퀘스트를 찾을 수 없습니다"}
+    targets = await db.fetch("""
+        SELECT t.report_id, t.cleaned_at, u.username AS cleaned_by,
+               ST_X(tr.location::geometry) AS lon, ST_Y(tr.location::geometry) AS lat,
+               tr.trash_type, tr.severity, (tr.image_urls)[1] AS image
+        FROM quest_target_reports t
+        JOIN trash_reports tr ON tr.id=t.report_id
+        LEFT JOIN users u ON u.id=t.cleaned_by
+        WHERE t.quest_id=$1::uuid ORDER BY tr.created_at ASC
+    """, quest_id)
+    d = dict(q)
+    d["id"] = str(d["id"])
+    d["targets"] = [dict(t) | {"report_id": str(t["report_id"])} for t in targets]
+    d["cleaned"] = sum(1 for t in targets if t["cleaned_at"])
+    return {"success": True, "data": d}
+
+
+@app.post("/cleanup-quests/generate")
+async def trigger_generate_cleanup(u: dict = Depends(get_current_user)):
+    """관리자 수동 트리거 — 수거 퀘스트 즉시 생성."""
+    if u.get("role") != "admin":
+        return {"success": False, "error": "관리자 권한 필요"}
+    n = await _generate_cleanup_quests(app.state.db)
+    await _expire_cleanup_quests(app.state.db)
+    return {"success": True, "data": {"created": n}}
 
 
 if __name__ == "__main__":

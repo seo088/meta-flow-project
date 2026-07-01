@@ -1,0 +1,46 @@
+# Docker 빌드 컨텍스트에서 제외할 항목
+
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.venv/
+venv/
+
+# 사용자 업로드/캐시
+apps/web/avatars/*.png
+apps/web/avatars/*.jpg
+apps/web/avatars/*.ico
+
+# IDE/OS
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db
+
+# 환경/시크릿 (런타임에 주입)
+.env
+.env.local
+.env.*.local
+
+# 로그
+*.log
+logs/
+
+# 도커 자체
+Dockerfile
+.dockerignore
+docker-compose*.yml
+
+# 인프라(외부에서 관리)
+infra/
+
+# 데이터/모델
+data/*.json
+*.pt
+*.onnx
+*.h5
+
+# Git
+.git/
+.gitignore

@@ -120,6 +120,10 @@ body{font-family:'Pretendard Variable',Pretendard,-apple-system,BlinkMacSystemFo
 .badge-type{font-size:10px;padding:2px 8px;border-radius:10px;font-weight:600}
 .type-plastic{background:rgba(56,189,248,.2);color:#38bdf8}.type-food{background:rgba(251,191,36,.2);color:#fbbf24}
 .type-general{background:rgba(168,85,247,.2);color:#a855f7}.type-large{background:rgba(239,68,68,.2);color:#ef4444}
+.type-cigarette{background:rgba(161,98,7,.2);color:#a16207}.type-paper{background:rgba(245,158,11,.2);color:#f59e0b}
+.type-vinyl{background:rgba(34,197,94,.2);color:#22c55e}.type-metal{background:rgba(100,116,139,.2);color:#64748b}
+.type-glass{background:rgba(20,184,166,.2);color:#14b8a6}.type-styrofoam{background:rgba(232,121,249,.2);color:#e879f9}
+.type-unknown{background:rgba(107,114,128,.2);color:#6b7280}
 .log-area{background:var(--bg-input);border:1px solid var(--border);border-radius:8px;padding:10px;font-size:11px;max-height:200px;overflow-y:auto;font-family:monospace;line-height:1.5}
 .loading{text-align:center;color:var(--text-muted);padding:20px;font-size:12px}
 
@@ -267,6 +271,16 @@ body{font-family:'Pretendard Variable',Pretendard,-apple-system,BlinkMacSystemFo
 /* Map */
 #zone-map{width:100%;height:70vh;min-height:400px;border-radius:8px;border:1px solid var(--border);margin-bottom:0;z-index:1}
 .leaflet-container{background:var(--leaflet-bg)}
+.leaflet-popup-content-wrapper{border-radius:14px;box-shadow:0 8px 28px var(--shadow);background:var(--bg-secondary);color:var(--text-primary)}
+.leaflet-popup-content{margin:13px 15px;font-family:inherit;line-height:1.5;width:auto!important}
+.leaflet-popup-tip{background:var(--bg-secondary)}
+.pin-pop{width:198px;max-width:100%}
+.pin-actions{display:flex;flex-direction:column;gap:6px;margin-top:11px}
+.leaflet-popup-content a.pin-link{display:flex;align-items:center;justify-content:center;gap:5px;width:100%;box-sizing:border-box;padding:8px 10px;border-radius:9px;font-size:12.5px;font-weight:700;text-decoration:none;transition:all .15s;white-space:nowrap}
+.leaflet-popup-content a.pin-link.ghost{color:var(--accent);background:var(--accent-bg);border:1px solid transparent}
+.leaflet-popup-content a.pin-link.ghost:hover{background:var(--accent);color:#fff}
+.leaflet-popup-content a.pin-link.solid{color:#fff;background:var(--accent);box-shadow:0 2px 8px var(--accent-bg)}
+.leaflet-popup-content a.pin-link.solid:hover{filter:brightness(1.08)}
 
 /* Table */
 .tbl{width:100%;font-size:11px;border-collapse:collapse}
@@ -352,7 +366,7 @@ body{font-family:'Pretendard Variable',Pretendard,-apple-system,BlinkMacSystemFo
 /* Post compose modal */
 .compose-overlay{display:none;position:fixed;top:0;left:0;width:100%;height:100%;background:rgba(0,0,0,.7);z-index:2000;align-items:center;justify-content:center}
 .compose-overlay.open{display:flex}
-.compose-box{background:var(--bg-secondary);border:1px solid var(--border);border-radius:16px;padding:20px;max-width:560px;width:95%;position:relative}
+.compose-box{background:var(--bg-secondary);border:1px solid var(--border);border-radius:16px;padding:20px;max-width:560px;width:95%;position:relative;max-height:90vh;overflow-y:auto}
 .compose-box textarea{width:100%;min-height:100px;background:var(--bg-input);border:1px solid var(--border);border-radius:10px;padding:12px;color:var(--text-primary);font-size:14px;resize:vertical;outline:none;font-family:inherit}
 .compose-box textarea:focus{border-color:var(--accent)}
 .compose-tags{display:flex;flex-wrap:wrap;gap:4px;margin-top:8px}
@@ -741,10 +755,16 @@ body{font-family:'Pretendard Variable',Pretendard,-apple-system,BlinkMacSystemFo
         <div style="flex:1;min-width:140px">
           <label style="font-size:11px;color:var(--text-muted);margin-bottom:4px;display:block">🗑️ 쓰레기 유형</label>
           <select id="compose-trash-type" style="width:100%;padding:8px 10px;border:1px solid var(--border);border-radius:8px;background:var(--bg-input);color:var(--text-primary);font-size:12px">
-            <option value="plastic">♻️ 플라스틱</option>
+            <option value="general" selected>🗑️ 일반쓰레기</option>
+            <option value="plastic">♻️ 플라스틱류</option>
+            <option value="vinyl">🛍️ 비닐류</option>
+            <option value="paper">📄 종이류</option>
+            <option value="metal">🥫 캔/금속류</option>
+            <option value="glass">🍾 유리류</option>
+            <option value="styrofoam">🧊 스티로폼</option>
+            <option value="cigarette">🚬 담배꽁초</option>
             <option value="food">🍔 음식물</option>
-            <option value="general" selected>🗑️ 일반</option>
-            <option value="large">📦 대형</option>
+            <option value="large">📦 대형/수거불가</option>
           </select>
         </div>
         <div style="flex:1;min-width:140px">
@@ -827,6 +847,16 @@ body{font-family:'Pretendard Variable',Pretendard,-apple-system,BlinkMacSystemFo
 
   <!-- 지도 뷰 -->
   <div id="zone-view-map">
+    <div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap;margin-bottom:8px;font-size:12px">
+      <label style="display:flex;align-items:center;gap:5px;color:var(--text-secondary)">핀 상한
+        <input type="number" id="pin-limit" value="200" min="50" max="5000" step="50" onchange="loadZones()" style="width:78px;background:var(--bg-input);border:1px solid var(--border);border-radius:7px;padding:5px 8px;color:var(--text-primary);font-size:12px">
+      </label>
+      <label style="display:flex;align-items:center;gap:5px;cursor:pointer;color:var(--text-secondary)">
+        <input type="checkbox" id="show-external" checked onchange="loadZones()"> 외부 데이터셋 표시
+      </label>
+      <button class="btn" onclick="openDatasetFeedModal()" style="padding:5px 12px;font-size:11px;background:var(--bg-tertiary);color:var(--text-primary)">📦 외부 데이터셋 보기</button>
+      <span id="pin-count" style="color:var(--text-muted);margin-left:auto"></span>
+    </div>
     <div id="zone-map"></div>
   </div>
 
@@ -868,6 +898,8 @@ body{font-family:'Pretendard Variable',Pretendard,-apple-system,BlinkMacSystemFo
     <h3 style="font-size:16px;font-weight:700;margin-bottom:12px">💬 메시지함</h3>
     <div id="dm-conversations-list"><div class="loading">로딩 중...</div></div>
   </div>
+  <!-- 데이터 활용 API 신청 (전체 로그인 사용자) -->
+  <div id="data-access-me" style="max-width:640px;margin:18px auto 0;display:none"></div>
 </div>
 
 <!-- POST (single post permalink) -->
@@ -912,10 +944,15 @@ body{font-family:'Pretendard Variable',Pretendard,-apple-system,BlinkMacSystemFo
     <button onclick="switchQuestTab('explore')">🔍 탐색</button>
     <button onclick="switchQuestTab('invitations')">📩 초대함 <span id="invite-count-badge" style="display:none;background:#ef4444;color:#fff;border-radius:50%;padding:0 5px;font-size:9px;margin-left:2px"></span></button>
     <button onclick="switchQuestTab('badges')">🏅 배지</button>
+    <button id="quest-tab-all-btn" onclick="switchQuestTab('all')" style="display:none">🛡️ 전체</button>
   </div>
   <!-- 내 퀘스트 -->
   <div id="quest-tab-my">
     <div class="zone-grid" id="quest-my-list"><div class="loading">로딩 중...</div></div>
+  </div>
+  <!-- 전체 퀘스트 (관리자) -->
+  <div id="quest-tab-all" style="display:none">
+    <div class="zone-grid" id="quest-all-list"><div class="loading">로딩 중...</div></div>
   </div>
   <!-- 탐색 -->
   <div id="quest-tab-explore" style="display:none">
@@ -930,6 +967,7 @@ body{font-family:'Pretendard Variable',Pretendard,-apple-system,BlinkMacSystemFo
         <option value="custom">🎯 커스텀</option>
       </select>
     </div>
+    <div id="cleanup-quest-list"></div>
     <div class="zone-grid" id="quest-explore-list"><div class="loading">로딩 중...</div></div>
   </div>
   <!-- 초대함 -->
@@ -1004,6 +1042,36 @@ body{font-family:'Pretendard Variable',Pretendard,-apple-system,BlinkMacSystemFo
   </div>
 </div>
 
+<!-- 수거 인증 모달 -->
+<div class="compose-overlay" id="cleanup-modal">
+  <div class="compose-box" style="max-width:440px">
+    <button class="close-btn" onclick="closeCleanupModal()" style="position:absolute;top:12px;right:16px;background:none;border:none;color:var(--text-muted);font-size:18px;cursor:pointer">&times;</button>
+    <h3 style="font-size:16px;font-weight:700;margin-bottom:4px">🧹 수거 인증</h3>
+    <p style="font-size:12px;color:var(--text-muted);margin-bottom:14px">치운 자리의 사진을 올리면 제보가 <b>완료</b> 처리되고 <b>+50 XP</b>(구역·주말 보너스)가 지급됩니다.</p>
+    <input type="hidden" id="cleanup-report-id">
+    <div id="cleanup-preview" style="display:none;margin-bottom:10px"></div>
+    <label class="btn" style="display:block;text-align:center;background:var(--bg-tertiary);color:var(--text-primary);cursor:pointer;margin-bottom:10px">
+      📷 수거 후 사진 선택
+      <input type="file" id="cleanup-file" accept="image/*" capture="environment" style="display:none" onchange="previewCleanup(this)">
+    </label>
+    <textarea id="cleanup-note" style="width:100%;min-height:60px;background:var(--bg-input);border:1px solid var(--border);border-radius:10px;padding:10px;color:var(--text-primary);font-size:13px;resize:vertical;outline:none;font-family:inherit" placeholder="메모 (선택)"></textarea>
+    <div style="display:flex;justify-content:flex-end;gap:8px;margin-top:12px">
+      <button class="btn" style="background:var(--bg-tertiary);color:var(--text-primary)" onclick="closeCleanupModal()">취소</button>
+      <button class="btn btn-primary" id="cleanup-submit-btn" onclick="submitCleanup()" style="padding:8px 20px">수거 인증</button>
+    </div>
+  </div>
+</div>
+
+<!-- 외부 데이터셋 전용 피드 (전체 사용자) -->
+<div class="compose-overlay" id="dataset-feed-modal">
+  <div class="compose-box" style="max-width:560px;max-height:86vh;overflow-y:auto">
+    <button class="close-btn" onclick="closeDatasetFeedModal()" style="position:absolute;top:12px;right:16px;background:none;border:none;color:var(--text-muted);font-size:18px;cursor:pointer">&times;</button>
+    <h3 style="font-size:16px;font-weight:700;margin-bottom:4px">📦 외부 데이터셋 제보</h3>
+    <p style="font-size:12px;color:var(--text-muted);margin-bottom:12px">배치 적재된 외부 데이터셋(예: AIHub 새만금) 제보입니다. (메인 피드에서는 제외)</p>
+    <div id="dataset-feed-body"><div class="loading">로딩 중...</div></div>
+  </div>
+</div>
+
 <!-- DM 알림 팝업 (로그인 시 최초 1회) -->
 <div class="modal-overlay" id="dm-popup-modal">
   <div class="modal" style="max-width:480px">
@@ -1041,23 +1109,12 @@ body{font-family:'Pretendard Variable',Pretendard,-apple-system,BlinkMacSystemFo
   <div class="two-col">
     <div>
       <div class="section">
-        <div class="section-title">GeoJSON/COCO 내보내기</div>
-        <p style="font-size:12px;color:var(--text-muted);margin-bottom:8px">수집된 쓰레기 제보 데이터를 공공데이터 표준 포맷으로 변환합니다.</p>
+        <div class="section-title">GeoJSON 내보내기</div>
+        <p style="font-size:12px;color:var(--text-muted);margin-bottom:8px">수집된 쓰레기 제보 데이터를 공공데이터 표준 포맷(GeoJSON)으로 변환합니다.</p>
         <div style="display:flex;gap:8px;margin-bottom:12px">
           <button class="btn btn-primary" onclick="exportData('geojson')">GeoJSON</button>
-          <button class="btn btn-success" onclick="exportData('coco')">COCO</button>
-          <button class="btn" style="background:#a855f7;color:#fff" onclick="qualityCheck()">품질 검증</button>
         </div>
         <div id="data-result" class="log-area">대기 중</div>
-      </div>
-      <div class="section">
-        <div class="section-title">AIHub 새만금 쓰레기 데이터</div>
-        <p style="font-size:12px;color:var(--text-muted);margin-bottom:8px">AIHub 전북 새만금 방조제 유입 하천 쓰레기 데이터셋(#71594)을 시뮬레이션 수집·적재합니다.</p>
-        <div style="display:flex;gap:8px;margin-bottom:12px">
-          <button class="btn btn-primary" onclick="aihubCollect()">데이터 수집</button>
-          <button class="btn btn-success" onclick="aihubIngest()">DB 적재</button>
-        </div>
-        <div id="aihub-result" class="log-area">대기 중</div>
       </div>
     </div>
     <div>
@@ -1101,6 +1158,25 @@ body{font-family:'Pretendard Variable',Pretendard,-apple-system,BlinkMacSystemFo
     <button onclick="switchAdminTab('stats')" id="admin-tab-stats" style="flex:1;padding:7px 0;border:none;font-size:11px;font-weight:600;cursor:pointer;border-radius:7px;background:transparent;color:var(--text-muted);transition:all .2s">통계</button>
     <button onclick="switchAdminTab('xp')" id="admin-tab-xp" style="flex:1;padding:7px 0;border:none;font-size:11px;font-weight:600;cursor:pointer;border-radius:7px;background:transparent;color:var(--text-muted);transition:all .2s">XP</button>
     <button onclick="switchAdminTab('system')" id="admin-tab-system" style="flex:1;padding:7px 0;border:none;font-size:11px;font-weight:600;cursor:pointer;border-radius:7px;background:transparent;color:var(--text-muted);transition:all .2s">시스템</button>
+    <button onclick="switchAdminTab('dataset')" id="admin-tab-dataset" style="flex:1;padding:7px 0;border:none;font-size:11px;font-weight:600;cursor:pointer;border-radius:7px;background:transparent;color:var(--text-muted);transition:all .2s">데이터셋</button>
+    <button onclick="switchAdminTab('api')" id="admin-tab-api" style="flex:1;padding:7px 0;border:none;font-size:11px;font-weight:600;cursor:pointer;border-radius:7px;background:transparent;color:var(--text-muted);transition:all .2s">API</button>
+  </div>
+  <!-- API 플랫폼 (신청/발급/사용 통계) tab -->
+  <div id="admin-view-api" style="display:none">
+    <div style="display:flex;gap:8px;margin-bottom:12px">
+      <button class="btn btn-primary" onclick="loadAdminApi()" style="font-size:11px">새로고침</button>
+      <button class="btn" onclick="window.open(GW+'/api-console','_blank','noopener')" style="font-size:11px;background:var(--bg-tertiary);color:var(--text-primary)">⚡ API 콘솔</button>
+    </div>
+    <div id="admin-api"><div class="loading">로딩 중...</div></div>
+  </div>
+  <!-- Dataset(배치 적재) tab -->
+  <div id="admin-view-dataset" style="display:none">
+    <div style="display:flex;gap:8px;margin-bottom:12px">
+      <button class="btn btn-primary" onclick="loadAdminDataset()" style="font-size:11px">새로고침</button>
+      <button class="btn" style="background:var(--bg-tertiary);color:var(--text-primary);font-size:11px" onclick="loadDatasetFeed()">전용 피드 보기</button>
+    </div>
+    <div id="admin-dataset"><div class="loading">로딩 중...</div></div>
+    <div id="admin-dataset-feed"></div>
   </div>
   <!-- Users tab -->
   <div id="admin-view-users">
@@ -1120,6 +1196,7 @@ body{font-family:'Pretendard Variable',Pretendard,-apple-system,BlinkMacSystemFo
   <!-- Stats tab -->
   <div id="admin-view-stats" style="display:none">
     <div id="admin-stats"></div>
+    <div id="admin-cleanups" style="margin-top:14px"></div>
   </div>
   <!-- XP 현황 tab -->
   <div id="admin-view-xp" style="display:none">
@@ -1180,11 +1257,23 @@ body{font-family:'Pretendard Variable',Pretendard,-apple-system,BlinkMacSystemFo
         <span style="cursor:pointer;color:var(--accent)" onclick="openHelpSection('xp')">5. XP와 등급</span>
         <span style="cursor:pointer;color:var(--accent)" onclick="openHelpSection('ranking')">6. 랭킹</span>
         <span style="cursor:pointer;color:var(--accent)" onclick="openHelpSection('zone')">7. 구역 지도</span>
+        <span style="cursor:pointer;color:var(--accent)" onclick="openHelpSection('categories')">🗑️ 쓰레기 분류 사전</span>
         <span style="cursor:pointer;color:var(--accent)" onclick="openHelpSection('dm')">8. 메시지 (DM)</span>
         <span style="cursor:pointer;color:var(--accent)" onclick="openHelpSection('profile')">9. 프로필 설정</span>
         <span style="cursor:pointer;color:var(--accent)" onclick="openHelpSection('policy')">10. 콘텐츠 정책</span>
         <span style="cursor:pointer;color:var(--accent)" onclick="openHelpSection('faq')">11. 자주 묻는 질문</span>
         <span style="cursor:pointer;color:var(--accent)" onclick="openHelpSection('privacy')">12. 개인정보 처리방침</span>
+      </div>
+    </div>
+
+    <!-- 쓰레기 분류 사전 -->
+    <div class="help-fold" id="help-categories">
+      <div class="help-fold-header" onclick="this.parentElement.classList.toggle('open');loadCategoryDict()">
+        <span>🗑️ 쓰레기 분류 사전</span><span class="help-arrow">▼</span>
+      </div>
+      <div class="help-fold-body" style="padding:0 14px 14px">
+        <p style="font-size:12px;color:var(--text-muted);margin-bottom:10px">제보 시 선택하는 쓰레기 품목과 수거구분·재활용 여부 안내입니다. (출처: report_categories)</p>
+        <div id="help-categories-body"><div class="loading">로딩 중...</div></div>
       </div>
     </div>
 
@@ -1818,7 +1907,7 @@ function buildMobileMoreMenu(){
   }
   if(perms.includes('ranking')||isAdmin)items.push({icon:svgIcon('<path d="M6 9H4.5a2.5 2.5 0 0 1 0-5C7 4 9 7 12 7s5-3 7.5-3a2.5 2.5 0 0 1 0 5H18"/><path d="M18 9v10a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2V9"/>'),label:'랭킹',action:"showTab('ranking');closeMobileMore()"});
   if(perms.includes('zone')||isAdmin)items.push({icon:svgIcon('<polygon points="1 6 1 22 8 18 16 22 23 18 23 2 16 6 8 2 1 6"/><line x1="8" y1="2" x2="8" y2="18"/><line x1="16" y1="6" x2="16" y2="22"/>'),label:'구역',action:"showTab('zones');closeMobileMore()"});
-  if(perms.includes('drone')||isAdmin)items.push({icon:svgIcon('<path d="M12 12m-3 0a3 3 0 1 0 6 0 3 3 0 1 0 -6 0"/><path d="M3 7l3 3m12-3l-3 3m-9 5l3-3m12 3l-3-3"/>'),label:'드론',action:"showTab('drone');closeMobileMore()"});
+  // [폐기] 드론/모빌리티 — 백엔드 서비스 미구현으로 탭 비활성 (services/drone 부재)
   if(isAdmin){
     items.push({icon:svgIcon('<line x1="18" y1="20" x2="18" y2="10"/><line x1="12" y1="20" x2="12" y2="4"/><line x1="6" y1="20" x2="6" y2="14"/>'),label:'데이터',action:"showTab('data');closeMobileMore()"});
     items.push({icon:svgIcon('<circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/>'),label:'관리자',action:"showTab('admin');closeMobileMore()"});
@@ -1946,7 +2035,7 @@ function updateAuthUI(){
     if(perms.includes('quest')||isAdmin) tabsHtml+=`<button class="tab" data-tab="quests" onclick="showTab('quests')">퀘스트</button>`;
     if(perms.includes('ranking')||isAdmin) tabsHtml+=`<button class="tab" data-tab="ranking" onclick="showTab('ranking')">랭킹</button>`;
     if(perms.includes('zone')||isAdmin) tabsHtml+=`<button class="tab" data-tab="zones" onclick="showTab('zones')">구역</button>`;
-    if(perms.includes('drone')||isAdmin) tabsHtml+=`<button class="tab" data-tab="drone" onclick="showTab('drone')">드론</button>`;
+    // [폐기] 드론 탭 — 백엔드 미구현으로 비활성
     if(perms.includes('data')||isAdmin) tabsHtml+=`<button class="tab" data-tab="data" onclick="showTab('data')">데이터</button>`;
     if(isAdmin) tabsHtml+=`<button class="tab" data-tab="admin" onclick="showTab('admin')">관리자</button>`;
     // 아키텍처 → 관리자 > 시스템 탭으로 통합됨
@@ -2145,6 +2234,8 @@ function timeAgo(d){
 
 // themedImg 제거됨 — 더미 이미지 대신 실제 업로드 이미지만 사용
 
+// 쓰레기 카테고리 한글 라벨 (shared/core/trash_taxonomy.py 와 동기화)
+const TRASH_LABELS={plastic:'플라스틱류',food:'음식물',general:'일반쓰레기',large:'대형/수거불가',unknown:'미분류',cigarette:'담배꽁초',paper:'종이류',vinyl:'비닐류',metal:'캔/금속류',glass:'유리류',styrofoam:'스티로폼'};
 function feedCard(p,full=false){
   const imgs=(p.image_urls||[]).filter(u=>u&&u.length>0);
   const hasRealImages=imgs.length>0;
@@ -2163,6 +2254,11 @@ function feedCard(p,full=false){
   const isOwner=currentUser&&(currentUser.username===username||currentUser.user_id===String(p.uid));
   const canEdit=isOwner; // 테스트 환경: 시간 제한 해제
   const wasEdited=p.updated_at?true:false;
+
+  // 멘션 자동완성용 작성자 시드: DOM 역파싱 대신 게시글 데이터에서 직접 기록
+  if(p.id!=null&&username&&username!=='익명'){
+    _postAuthors[p.id]={username,display_name:p.display_name||username,avatar_url:p.avatar_url,isAuthor:true};
+  }
 
   // 이미지 갤러리 렌더링: 업로드 이미지만 표시 (없으면 이미지 없음)
   let imgHtml='';
@@ -2193,7 +2289,7 @@ function feedCard(p,full=false){
       ${isReport?`<div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap">
         <span class="badge-type severity-${sev}">${sevLabel}</span>
         <span class="badge-type" style="background:rgba(56,189,248,.15);color:#38bdf8">${statusLabel}</span>
-        <span class="badge-type type-${p.trash_type||'general'}">${p.trash_type||'general'}</span>
+        <span class="badge-type type-${p.trash_type||'general'}">${TRASH_LABELS[p.trash_type]||p.trash_type||'일반쓰레기'}</span>
         <span class="xp-badge">+20 XP</span>
       </div>`:`<div style="display:flex;align-items:center;gap:6px">
         <span class="xp-badge">+20 XP</span>
@@ -2571,8 +2667,14 @@ async function toggleComments(postId,ev){
     updateFeedDeleteBtn(postId,r.data.comments.length);
     // 참가자 수집 (멘션 자동완성용)
     const seen=new Set();const parts=[];
-    const authorEl=card?.querySelector('.feed-header');
-    if(authorEl){const m=authorEl.getAttribute('onclick')?.match(/showProfile\('([^']+)'\)/);if(m)if(!seen.has(m[1])){seen.add(m[1]);parts.push({username:m[1],display_name:card?.querySelector('.feed-user .name')?.childNodes[0]?.textContent?.trim()||m[1],isAuthor:true})}}
+    // 작성자: feedCard 렌더 시 시드된 데이터 우선, 없으면 DOM 역파싱 폴백(구버전 호환)
+    let author=_postAuthors[postId];
+    if(!author){
+      const authorEl=card?.querySelector('.feed-header');
+      const m=authorEl?.getAttribute('onclick')?.match(/showProfile\('([^']+)'\)/);
+      if(m)author={username:m[1],display_name:card?.querySelector('.feed-user .name')?.childNodes[0]?.textContent?.trim()||m[1],isAuthor:true};
+    }
+    if(author&&author.username){seen.add(author.username);parts.push(author);}
     r.data.comments.forEach(c=>{if(!seen.has(c.username)&&c.username!==currentUser?.username){seen.add(c.username);parts.push({username:c.username,display_name:c.display_name,avatar_url:c.avatar_url})}});
     _postParticipants[postId]=parts;
   }
@@ -2580,13 +2682,19 @@ async function toggleComments(postId,ev){
 
 // ═══ @MENTION AUTOCOMPLETE ═══
 const _postParticipants={};
+const _postAuthors={};   // postId → 작성자 정보 (feedCard 렌더 시 시드, 멘션 자동완성 기준)
 let _mentionOpen=false;
 let _mentionActiveIdx=0;        // 키보드 네비 현재 인덱스
 let _mentionItemCount=0;        // 현재 드롭다운 후보 수
 function initMentionFocus(input,postId){
   // 빈 입력란이면 @ 힌트
   if(!input.value)input.value='@';
-  setTimeout(()=>{input.selectionStart=input.selectionEnd=input.value.length},0);
+  setTimeout(()=>{
+    input.selectionStart=input.selectionEnd=input.value.length;
+    // 값을 코드로 채우면 oninput이 발생하지 않으므로 직접 드롭다운을 연다
+    // (커서 앞이 '@'면 작성자/참가자 후보를 즉시 표시)
+    handleMentionInput(input,postId);
+  },0);
 }
 function handleMentionInput(input,postId){
   const val=input.value;
@@ -2606,7 +2714,9 @@ function handleMentionInput(input,postId){
 }
 function showMentionDropdown(input,postId,query){
   hideMentionDropdown();
-  const list=_postParticipants[postId]||[];
+  // 참가자 목록이 아직 없으면(댓글 미로드 등) 최소한 작성자 시드라도 사용
+  let list=_postParticipants[postId];
+  if(!list||!list.length){const a=_postAuthors[postId];list=a?[a]:[];}
   const filtered=(query?list.filter(u=>(u.username||'').toLowerCase().includes(query)||(u.display_name||'').toLowerCase().includes(query)):list).slice(0,8);
   if(!filtered.length){_mentionOpen=false;return}
   const dd=document.createElement('div');
@@ -3391,6 +3501,7 @@ function showTab(n){
   if(n==='drone')loadDrone();
   if(n==='data')loadDataStats();
   if(n==='admin')loadAdmin();
+  if(n==='profile')loadDataAccessMe();
   if(n==='notifications')loadNotificationsPage();
   // arch → admin > system으로 통합됨
 }
@@ -4577,19 +4688,26 @@ async function loadZones(){
     L.marker([z.lat,z.lon],{icon:L.divIcon({className:'',html:`<div style="display:flex;flex-direction:column;align-items:center"><div style="background:${z.color};color:#fff;padding:3px 10px;border-radius:6px;font-size:11px;font-weight:700;white-space:nowrap;box-shadow:0 2px 6px rgba(0,0,0,.3)">${z.icon} ${z.name}</div><div style="width:2px;height:10px;background:${z.color}"></div><div style="width:6px;height:6px;border-radius:50%;background:${z.color}"></div></div>`,iconSize:[0,0],iconAnchor:[40,42]})}).addTo(zoneMap).bindPopup(`<div style="min-width:140px"><b>${z.icon} ${z.name}</b><br><span style="font-size:10px;color:#666">lat: ${z.lat.toFixed(4)}, lon: ${z.lon.toFixed(4)}</span><br>${currentUser?`<a href="#" onclick="event.preventDefault();reportZoneLocation('${k}','${z.name}')" style="font-size:10px;color:#f59e0b">📍 위치 수정 제보 (+10 XP)</a>`:''}</div>`);
   }
 
+  // 지도 컨트롤 값 (핀 상한 + 외부 데이터셋 표시)
+  const _limit=Math.max(50,Math.min(5000,parseInt(document.getElementById('pin-limit')?.value)||200));
+  const _inclExt=document.getElementById('show-external')?.checked!==false;
   // Load pins + zone stats in parallel
   const [pins,stats,allQuests]=await Promise.all([
-    f(API.gis+'/pins/nearby?lat=35.95&lon=126.70&radius=20000&size=200'),
+    f(API.gis+`/pins/nearby?lat=35.95&lon=126.70&radius=20000&size=${_limit}&include_external=${_inclExt}`),
     f(API.gis+'/zones/stats'),
     f(API.game+'/quests/popular?size=50'),
   ]);
+  const _pcEl=document.getElementById('pin-count');
+  if(_pcEl&&pins?.data)_pcEl.textContent=`핀 ${pins.data.length}개${pins.data.length>=_limit?' (상한 도달)':''}`;
 
   // Render pins on map + pin list
   if(pins?.data){
     const severityColors={low:'#4ade80',mid:'#fbbf24',high:'#ef4444',boss:'#a855f7'};
-    const trashIcons={plastic:'♻️',food:'🍔',general:'🗑️',large:'📦'};
+    const trashIcons={plastic:'♻️',food:'🍔',general:'🗑️',large:'📦',cigarette:'🚬',paper:'📄',vinyl:'🛍️',metal:'🥫',glass:'🍾',styrofoam:'🧊'};
+    const typeNames={plastic:'♻️ 플라스틱',food:'🍔 음식물',large:'📦 대형',general:'🗑️ 일반',cigarette:'🚬 담배꽁초',paper:'📄 종이류',vinyl:'🛍️ 비닐류',metal:'🥫 캔/금속',glass:'🍾 유리류',styrofoam:'🧊 스티로폼'};
 
     const statusLabels={pending:'⏳ 대기',ai_verified:'✅ 확인',in_progress:'🔄 진행',completed:'✔️ 완료'};
+    const statusColors={pending:'#f59e0b',ai_verified:'#10b981',in_progress:'#3b82f6',completed:'#22c55e'};
     const sevLabels={low:'🟢 안전',mid:'🟡 주의',high:'🔴 심각',boss:'💀 보스'};
 
     pins.data.forEach(p=>{
@@ -4597,22 +4715,52 @@ async function loadZones(){
       const icon=trashIcons[p.trash_type]||'📍';
       const marker=L.circleMarker([p.lat,p.lon],{radius:6,fillColor:color,color:color,weight:1,fillOpacity:0.7})
         .addTo(zoneMap)
-        .bindPopup(`<div style="min-width:120px"><b>${icon} ${p.trash_type||'일반'}</b><br>${sevLabels[p.severity]||p.severity}<br>${statusLabels[p.status]||p.status}<br><span style="font-size:10px;color:#666">${p.zone_name||''} · ${p.created_at?timeAgo(p.created_at):''}</span></div>`);
+        .bindPopup(`<div class="pin-pop">
+          <div style="font-size:14px;font-weight:700;margin-bottom:7px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${icon} ${typeNames?.[p.trash_type]||p.trash_type||'일반'}</div>
+          <div style="display:flex;gap:6px;align-items:center;margin-bottom:6px">
+            <span style="font-size:12px">${sevLabels[p.severity]||p.severity}</span>
+            <span style="font-size:11px;font-weight:600;padding:1px 8px;border-radius:999px;background:${(statusColors[p.status]||'#64748b')}22;color:${statusColors[p.status]||'#64748b'}">${statusLabels[p.status]||p.status}</span>
+          </div>
+          <div style="font-size:11px;color:var(--text-muted)">${p.zone_name||''} · ${p.created_at?timeAgo(p.created_at):''}</div>
+          ${(p.post_id||(currentUser&&p.status!=='completed'))?`<div class="pin-actions">
+            ${p.post_id?`<a href="#" class="pin-link ghost" onclick="event.preventDefault();showPost('${p.post_id}')">📄 게시글 보기</a>`:''}
+            ${(currentUser&&p.status!=='completed'&&(p.report_id||p.id))?`<a href="#" class="pin-link solid" onclick="event.preventDefault();openCleanupModal('${p.report_id||p.id}')">🧹 내가 치웠어요</a>`:''}
+          </div>`:''}
+        </div>`,{maxWidth:240,minWidth:200});
       window._pinMarkers[String(p.id)]=marker;
     });
 
+    // 제보 위치로 지도 자동 맞춤(fitBounds) — 핀이 화면 밖이라 안 보이던 문제 해결
+    const _pinBounds=pins.data.filter(p=>p.lat&&p.lon).map(p=>[p.lat,p.lon]);
+    window._pinBounds=_pinBounds;
+    if(_pinBounds.length){
+      try{ zoneMap.fitBounds(_pinBounds,{padding:[40,40],maxZoom:16}); }catch(e){}
+    }
+    // "제보 위치로" 재이동 컨트롤 (1회만 추가)
+    if(!window._fitCtl && _pinBounds.length){
+      const Ctl=L.Control.extend({options:{position:'topright'},onAdd:function(){
+        const b=L.DomUtil.create('button');
+        b.innerHTML='📍 제보 위치로';
+        b.style.cssText='background:#fff;border:1px solid #ccc;border-radius:8px;padding:6px 10px;font-size:12px;font-weight:600;cursor:pointer;box-shadow:0 2px 6px rgba(0,0,0,.2)';
+        L.DomEvent.on(b,'click',function(ev){L.DomEvent.stop(ev); if(window._pinBounds&&window._pinBounds.length) zoneMap.fitBounds(window._pinBounds,{padding:[40,40],maxZoom:16});});
+        return b;
+      }});
+      window._fitCtl=new Ctl(); zoneMap.addControl(window._fitCtl);
+    }
+
     // Pin card list — 유형별 > 심각도별 그룹핑 (unknown 제외)
     const filtered=pins.data.filter(p=>p.trash_type&&p.trash_type!=='unknown');
-    const typeOrder=['plastic','food','large','general'];
-    const typeNames={plastic:'♻️ 플라스틱',food:'🍔 음식물',large:'📦 대형',general:'🗑️ 일반'};
-    const typeBg={plastic:'rgba(74,222,128,.06)',food:'rgba(251,191,36,.06)',large:'rgba(168,85,247,.06)',general:'rgba(100,116,139,.06)'};
-    const typeBorder={plastic:'#4ade80',food:'#fbbf24',large:'#a855f7',general:'#64748b'};
+    const typeBaseOrder=['general','plastic','vinyl','paper','metal','glass','styrofoam','cigarette','food','large'];
+    const typeBg={plastic:'rgba(74,222,128,.06)',food:'rgba(251,191,36,.06)',large:'rgba(168,85,247,.06)',general:'rgba(100,116,139,.06)',cigarette:'rgba(161,98,7,.06)',paper:'rgba(245,158,11,.06)',vinyl:'rgba(34,197,94,.06)',metal:'rgba(100,116,139,.06)',glass:'rgba(20,184,166,.06)',styrofoam:'rgba(232,121,249,.06)'};
+    const typeBorder={plastic:'#4ade80',food:'#fbbf24',large:'#a855f7',general:'#64748b',cigarette:'#a16207',paper:'#f59e0b',vinyl:'#22c55e',metal:'#64748b',glass:'#14b8a6',styrofoam:'#e879f9'};
     const pinsByType={};
     filtered.forEach(p=>{
       const t=p.trash_type||'general';
       if(!pinsByType[t])pinsByType[t]=[];
       pinsByType[t].push(p);
     });
+    // 동적 카테고리 순서: 기준 순서 우선, 그 외(신규) 카테고리는 뒤에 자동 추가
+    const typeOrder=[...typeBaseOrder.filter(t=>pinsByType[t]),...Object.keys(pinsByType).filter(t=>!typeBaseOrder.includes(t))];
     const sevOrder=['high','boss','mid','low'];
     const sevNames={high:'🔴 심각',boss:'💀 보스',mid:'🟡 주의',low:'🟢 안전'};
     let pinHtml=`<div style="font-size:12px;color:var(--text-muted);margin-bottom:12px">총 ${filtered.length}건의 제보</div>`;
@@ -4669,14 +4817,16 @@ async function loadZones(){
         const st=statusLabels[p.status]||p.status;
         const color=severityColors[p.severity]||'#64748b';
         const hasLoc=p.lat&&p.lon;
+        const thumb=(p.image_urls&&p.image_urls.length)?`<img src="${p.image_urls[0]}" style="width:44px;height:44px;border-radius:6px;object-fit:cover;flex-shrink:0;cursor:zoom-in" loading="lazy" onerror="this.style.display='none'" onclick="event.stopPropagation();openImgViewer(this.src)">`:'';
         return `<div style="display:flex;gap:10px;padding:10px;border-bottom:1px solid var(--border);cursor:${hasLoc?'pointer':'default'}" ${hasLoc?`onclick="if(zoneMap&amp;&amp;window._pinMarkers['${p.id}']){zoneMap.setView([${p.lat},${p.lon}],17);window._pinMarkers['${p.id}'].openPopup();switchZoneSub('map')}"`:''}>
           <div style="width:4px;border-radius:2px;background:${color};flex-shrink:0"></div>
+          ${thumb}
           <div style="flex:1;min-width:0">
             <div style="display:flex;align-items:center;gap:6px;margin-bottom:3px">
               <span style="font-size:14px">${icon}</span>
               <span style="font-size:12px;font-weight:600">${typeNames[p.trash_type]||p.trash_type}</span>
               <span style="font-size:10px;padding:1px 6px;border-radius:4px;background:${color}15;color:${color};font-weight:600">${sev}</span>
-              <span style="font-size:10px;color:var(--text-muted);margin-left:auto">${st}</span>
+              <span style="font-size:10px;font-weight:600;margin-left:auto;padding:1px 7px;border-radius:999px;background:${(statusColors[p.status]||'#64748b')}1f;color:${statusColors[p.status]||'#64748b'};white-space:nowrap">${st}</span>
             </div>
             <div style="font-size:10px;color:var(--text-muted);display:flex;gap:8px">
               ${p.display_name?`<span style="font-weight:600">${p.display_name}</span>`:''}
@@ -4827,7 +4977,7 @@ async function openPinFeed(reportId, trashType){
     if(post){showPost(post.id);return}
   }
   // 연결된 게시글이 없으면 해당 유형 키워드로 피드 검색
-  const typeNames={plastic:'플라스틱',food:'음식물',general:'일반쓰레기',large:'대형폐기물',unknown:'쓰레기'};
+  const typeNames={plastic:'플라스틱',food:'음식물',general:'일반쓰레기',large:'대형폐기물',unknown:'쓰레기',cigarette:'담배꽁초',paper:'종이류',vinyl:'비닐류',metal:'캔/금속류',glass:'유리류',styrofoam:'스티로폼'};
   const keyword=typeNames[trashType]||trashType;
   openPlayground(keyword);
 }
@@ -4851,24 +5001,50 @@ async function loadQuests(){
       if(badge){badge.textContent=inv.data.length;badge.style.display='inline'}
     }
   }
+  // 관리자 '전체' 탭 노출
+  const allBtn=document.getElementById('quest-tab-all-btn');
+  if(allBtn)allBtn.style.display=(currentUser&&currentUser.role==='admin')?'':'none';
   switchQuestTab(currentQuestTab);
 }
 
 function switchQuestTab(tab){
   currentQuestTab=tab;
-  ['my','explore','invitations','badges'].forEach(t=>{
+  ['my','explore','invitations','badges','all'].forEach(t=>{
     const el=document.getElementById('quest-tab-'+t);
     if(el)el.style.display=t===tab?'block':'none';
   });
   document.getElementById('quest-detail-view').style.display='none';
   document.querySelectorAll('#quest-tabs button').forEach((b,i)=>{
-    const tabs=['my','explore','invitations','badges'];
+    const tabs=['my','explore','invitations','badges','all'];
     b.classList.toggle('active',tabs[i]===tab);
   });
   if(tab==='my')loadMyQuests();
   if(tab==='explore')loadExploreQuests();
   if(tab==='invitations')loadInvitations();
   if(tab==='badges')loadBadgesTab();
+  if(tab==='all')loadAllQuestsAdmin();
+}
+
+async function loadAllQuestsAdmin(){
+  const el=document.getElementById('quest-all-list');
+  if(!el)return;
+  if(!currentUser||currentUser.role!=='admin'){el.innerHTML='<div style="color:#ef4444">관리자 전용</div>';return}
+  el.innerHTML='<div class="loading">로딩 중...</div>';
+  const r=await f(API.game+'/admin/quests');
+  const qs=r?.data||[];
+  if(!qs.length){el.innerHTML='<div style="color:var(--text-muted);padding:12px">퀘스트가 없습니다.</div>';return}
+  const stLbl={active:'진행',closed:'종료',completed:'완료'};
+  el.innerHTML=`<div style="font-size:12px;color:var(--text-muted);margin-bottom:8px">전체 ${qs.length}건 (멤버십 무관)</div>`+
+    qs.map(q=>{
+      const icon=QT_ICON[q.quest_type]||'🎯';
+      return `<div onclick="openQuest('${q.id}')" style="border:1px solid var(--border);border-radius:12px;padding:12px 14px;margin-bottom:8px;cursor:pointer;background:var(--bg-secondary)">
+        <div style="display:flex;justify-content:space-between;align-items:center">
+          <div style="font-weight:700;font-size:14px">${icon} ${q.title}${q.is_cleanup?' <span style="font-size:10px;color:var(--accent)">수거</span>':''}</div>
+          <span style="font-size:10px;font-weight:700;padding:1px 8px;border-radius:999px;background:var(--bg-tertiary)">${stLbl[q.status]||q.status}</span>
+        </div>
+        <div style="font-size:11px;color:var(--text-muted);margin-top:3px">by ${q.creator_username||'-'} · 👥${q.member_count} · +${q.reward_xp}XP · ${q.is_public?'공개':'비공개'}${q.end_date?' · 마감 '+timeAgo(q.end_date):''}</div>
+      </div>`;
+    }).join('');
 }
 
 function questCard(q,showJoin=false){
@@ -4933,7 +5109,44 @@ async function loadMyQuests(){
   }
 }
 
+async function loadCleanupQuests(){
+  const el=document.getElementById('cleanup-quest-list');
+  if(!el)return;
+  const r=await f(API.game+'/cleanup-quests');
+  const qs=r?.data||[];
+  if(!qs.length){el.innerHTML='';return}
+  const now=Date.now();
+  el.innerHTML=`<div style="font-size:13px;font-weight:800;margin:4px 0 8px">🧹 수거 작전 <span style="font-size:11px;font-weight:400;color:var(--text-muted)">제한시간 내 수거하면 보너스 XP</span></div>`+
+    qs.map(q=>{
+      const cleaned=q.cleaned||0, target=q.target_count||1;
+      const pct=Math.min(100,Math.round(cleaned/target*100));
+      const end=q.end_date?new Date(q.end_date).getTime():0;
+      const remain=end-now;
+      const dleft=remain>0?Math.ceil(remain/86400000):0;
+      const hleft=remain>0?Math.floor(remain/3600000):0;
+      const tlabel=remain<=0?'마감':(dleft>1?`D-${dleft}`:`${hleft}시간 남음`);
+      return `<div style="border:1px solid var(--accent);border-radius:12px;padding:13px 15px;margin-bottom:10px;background:var(--accent-bg)">
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px">
+          <div style="font-weight:700;font-size:14px">${q.title}</div>
+          <span style="font-size:11px;font-weight:800;color:${remain<=0?'#ef4444':'var(--accent)'};white-space:nowrap">⏳ ${tlabel}</span>
+        </div>
+        <div style="font-size:11px;color:var(--text-muted);margin-bottom:7px">${q.zone_name||''} · 보상 +${q.reward_xp}XP</div>
+        <div style="display:flex;align-items:center;gap:8px;margin-bottom:9px">
+          <div style="flex:1;height:9px;background:var(--bg-tertiary);border-radius:999px;overflow:hidden"><div style="width:${pct}%;height:100%;background:var(--accent)"></div></div>
+          <span style="font-size:11px;font-weight:700;white-space:nowrap">${cleaned}/${target}</span>
+        </div>
+        <button class="btn btn-primary" style="width:100%;font-size:12px" onclick="goCleanup('${q.zone_id||''}')">🧹 치우러 가기</button>
+      </div>`;
+    }).join('');
+}
+function goCleanup(zoneId){
+  showTab('zones');
+  setTimeout(()=>{ if(typeof switchZoneSub==='function')switchZoneSub('map'); if(window._pinBounds&&window._pinBounds.length&&window.zoneMap)zoneMap.fitBounds(window._pinBounds,{padding:[40,40],maxZoom:16}); },300);
+  showToast('지도에서 핀을 눌러 "내가 치웠어요"로 인증하세요');
+}
+
 async function loadExploreQuests(){
+  loadCleanupQuests();
   const el=document.getElementById('quest-explore-list');
   el.innerHTML='<div class="loading">로딩 중...</div>';
   const r=await f(API.game+'/quests/popular?size=20');
@@ -5054,6 +5267,13 @@ async function joinQuest(questId){
   }
 }
 
+async function completeQuest(questId,rewardXp){
+  if(!confirm(`이 퀘스트를 완료 처리할까요?\n참여 멤버 전원에게 +${rewardXp} XP가 지급됩니다.`))return;
+  const r=await fp(API.game+'/quests/'+questId+'/complete',{});
+  if(r?.success){showToast(`✅ 퀘스트 완료! ${r.data.granted}명에게 +${r.data.reward_xp} XP 지급`);openQuest(questId);}
+  else alert('완료 실패: '+(r?.error||'권한/오류'));
+}
+
 async function respondInvite(invId,action){
   const r=await fp(API.game+'/invitations/'+invId+'/respond',{action});
   if(r?.success){
@@ -5143,6 +5363,8 @@ async function openQuest(questId){
         </div>
       </div>
       <div style="display:flex;gap:6px;align-items:center;flex-shrink:0">
+        ${(isHost&&q.status!=='completed')?`<button class="btn btn-success" onclick="completeQuest('${questId}',${q.reward_xp||0})" style="font-size:10px;padding:4px 12px">✅ 완료 (+${q.reward_xp||0}XP)</button>`:''}
+        ${q.status==='completed'?`<span style="font-size:11px;font-weight:700;color:#22c55e;padding:4px 8px">✔️ 완료됨</span>`:''}
         ${q.start_date?`<button class="btn" onclick="addToGoogleCalendar('${q.title.replace(/'/g,"\\'")}','${(q.description||'').replace(/'/g,"\\'")}','${q.start_date}','${q.end_date||''}')" style="font-size:10px;padding:4px 10px;background:var(--accent-bg);color:var(--accent);border:1px solid var(--accent)">캘린더 추가</button>`:''}
         <button class="btn" onclick="shareQuestMessage('${questId}','${q.title.replace(/'/g,"\\'")}','${(q.description||'').replace(/'/g,"\\'")}','${q.start_date||''}','${q.end_date||''}','${q.member_count}','${q.max_members}','${q.reward_xp}')" style="font-size:10px;padding:4px 10px;background:var(--accent-bg);color:var(--accent);border:1px solid var(--accent)">초대 메시지</button>
         ${q.is_member?`<button class="btn" onclick="leaveQuest('${questId}')" style="font-size:10px;padding:4px 10px;background:rgba(239,68,68,.1);color:#ef4444;border:1px solid rgba(239,68,68,.3)">${q.my_role==='host'?'종료':'나가기'}</button>`
@@ -6223,16 +6445,279 @@ async function loadSystemMonitor(){
 let _adminTab='users';
 function switchAdminTab(tab){
   _adminTab=tab;
-  ['users','hidden','stats','xp','system'].forEach(t=>{
+  ['users','hidden','stats','xp','system','dataset','api'].forEach(t=>{
     const el=document.getElementById('admin-view-'+t);
     const btn=document.getElementById('admin-tab-'+t);
     if(el)el.style.display=t===tab?'block':'none';
     if(btn){btn.style.background=t===tab?'var(--bg-secondary)':'transparent';btn.style.color=t===tab?'var(--text-primary)':'var(--text-muted)';btn.style.boxShadow=t===tab?'0 1px 3px rgba(0,0,0,.1)':'none'}
   });
   if(tab==='hidden')loadHiddenPosts();
-  if(tab==='stats')loadAdminStats();
+  if(tab==='stats'){loadAdminStats();loadAdminCleanups();}
   if(tab==='xp')loadAdminXP();
   if(tab==='system')loadSystemMonitor();
+  if(tab==='dataset')loadAdminDataset();
+  if(tab==='api')loadAdminApi();
+}
+
+// 배치 적재 현황 (진행상황 + 통계) — GET /admin/reports/batches
+async function loadAdminDataset(){
+  const el=document.getElementById('admin-dataset');
+  el.innerHTML='<div class="loading">로딩 중...</div>';
+  const r=await f(API.sns+'/admin/reports/batches');
+  if(!r?.success){el.innerHTML='<div style="color:#ef4444;padding:20px">권한이 없거나 조회 실패</div>';return}
+  const d=r.data;
+  const pct=d.total?Math.round(d.with_location/d.total*100):0;
+  let html=`<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(100px,1fr));gap:8px;margin-bottom:14px">
+    <div class="card"><div class="card-val">${d.total.toLocaleString()}</div><div class="card-label">배치 적재 제보</div></div>
+    <div class="card"><div class="card-val">${d.with_location.toLocaleString()}</div><div class="card-label">위치 보유 (${pct}%)</div></div>
+    <div class="card"><div class="card-val">${d.batches.length}</div><div class="card-label">배치 수</div></div>
+  </div>`;
+  // 배치별 진행 표
+  html+=`<div class="section" style="margin-bottom:12px"><div class="section-title">배치별 적재 현황 <span style="font-size:11px;font-weight:400;color:var(--text-muted)">— 행 클릭 시 상세</span></div>
+    <table class="tbl"><thead><tr><th>배치 ID</th><th>데이터셋</th><th>건수</th><th>위치</th><th>최근 적재</th></tr></thead><tbody>
+    ${d.batches.map(b=>`<tr style="cursor:pointer" onclick="openBatchDetail('${(b.batch_id||'').replace(/'/g,"\\'")}')"><td style="font-family:monospace;font-size:11px;color:var(--accent)">${b.batch_id||'-'} ›</td><td style="font-size:11px">${b.dataset||'-'}</td><td>${b.total}</td><td>${b.with_location}</td><td style="font-size:11px;color:var(--text-muted)">${b.last_at?timeAgo(b.last_at):'-'}</td></tr>`).join('')}
+    </tbody></table></div>`;
+  // 카테고리×수거구분 분포
+  const maxCnt=Math.max(1,...d.by_type.map(t=>t.cnt));
+  html+=`<div class="section"><div class="section-title">카테고리 · 수거구분 분포</div>
+    ${d.by_type.map(t=>{
+      const lbl=(TRASH_LABELS[t.trash_type]||t.trash_type);
+      const hmap={normal:'일반수거',recycle:'분리배출',bulk:'대형·수거불가'};
+      return `<div style="display:flex;align-items:center;gap:8px;margin-bottom:6px;font-size:12px">
+        <span style="width:90px;flex-shrink:0">${trashIcons[t.trash_type]||'🗑️'} ${lbl}</span>
+        <span style="width:78px;flex-shrink:0;font-size:10px;color:var(--text-muted)">${hmap[t.handling]||t.handling||''}</span>
+        <div style="flex:1;background:var(--bg-tertiary);border-radius:4px;height:14px;overflow:hidden"><div style="width:${Math.round(t.cnt/maxCnt*100)}%;height:100%;background:var(--accent)"></div></div>
+        <span style="width:46px;text-align:right;font-weight:600">${t.cnt}</span>
+      </div>`;
+    }).join('')}</div>`;
+  el.innerHTML=html;
+}
+
+// 단일 배치 상세 — 썸네일 그리드 + 분포 + 롤백
+async function openBatchDetail(batchId){
+  const el=document.getElementById('admin-dataset');
+  el.innerHTML='<div class="loading">배치 상세 로딩 중...</div>';
+  const r=await f(API.sns+'/admin/reports/batches/'+encodeURIComponent(batchId)+'?size=60');
+  if(!r?.success){el.innerHTML=`<div style="color:#ef4444;padding:20px">${r?.error||'조회 실패'}</div><button class="btn" onclick="loadAdminDataset()">← 목록</button>`;return}
+  const s=r.data.summary, dist=r.data.distribution, reports=r.data.reports;
+  const pct=s.total?Math.round(s.with_location/s.total*100):0;
+  const maxC=Math.max(1,...dist.map(d=>d.cnt));
+  const sevLbl={low:'경미',mid:'보통',high:'심각',boss:'위험'};
+  const hmap={normal:'일반수거',recycle:'분리배출',bulk:'대형·수거불가'};
+  let html=`<div style="display:flex;align-items:center;gap:10px;margin-bottom:12px">
+    <button class="btn" onclick="loadAdminDataset()" style="padding:5px 12px">← 목록</button>
+    <span style="font-family:monospace;font-weight:700">${batchId}</span></div>
+    <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(96px,1fr));gap:8px;margin-bottom:14px">
+      <div class="card"><div class="card-val">${s.total}</div><div class="card-label">제보</div></div>
+      <div class="card"><div class="card-val">${pct}%</div><div class="card-label">위치 보유</div></div>
+      <div class="card"><div class="card-val">${s.unknown_cnt}</div><div class="card-label">미분류(unknown)</div></div>
+    </div>
+    <div class="section" style="margin-bottom:12px"><div class="section-title">분류 · 심각도 · 수거구분 분포</div>
+    ${dist.map(d=>`<div style="display:flex;align-items:center;gap:8px;margin-bottom:5px;font-size:12px">
+      <span style="width:84px;flex-shrink:0">${trashIcons[d.trash_type]||'🗑️'} ${TRASH_LABELS[d.trash_type]||d.trash_type}</span>
+      <span style="width:40px;flex-shrink:0;font-size:10px;color:var(--text-muted)">${sevLbl[d.severity]||d.severity||''}</span>
+      <span style="width:78px;flex-shrink:0;font-size:10px;color:var(--text-muted)">${hmap[d.handling]||d.handling||''}</span>
+      <div style="flex:1;background:var(--bg-tertiary);border-radius:4px;height:13px;overflow:hidden"><div style="width:${Math.round(d.cnt/maxC*100)}%;height:100%;background:var(--accent)"></div></div>
+      <span style="width:42px;text-align:right;font-weight:600">${d.cnt}</span></div>`).join('')}</div>
+    <div class="section" style="margin-bottom:12px"><div class="section-title">제보 썸네일 (최근 ${reports.length}건)</div>
+    <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(84px,1fr));gap:6px">
+    ${reports.map(p=>{const img=(p.image_urls&&p.image_urls[0])||'';return `<div title="${p.trash_type}·${sevLbl[p.severity]||p.severity}" style="aspect-ratio:1;border-radius:6px;overflow:hidden;background:var(--bg-tertiary);position:relative">${img?`<img src="${img}" loading="lazy" style="width:100%;height:100%;object-fit:cover">`:`<div style="display:flex;align-items:center;justify-content:center;height:100%;font-size:22px">${trashIcons[p.trash_type]||'🗑️'}</div>`}<span style="position:absolute;bottom:0;left:0;right:0;background:rgba(0,0,0,.55);color:#fff;font-size:9px;padding:1px 3px">${trashIcons[p.trash_type]||''}${sevLbl[p.severity]||''}</span></div>`}).join('')}
+    </div></div>
+    <button class="btn" style="background:#ef4444;color:#fff" onclick="rollbackBatch('${batchId.replace(/'/g,"\\'")}',${s.total})">🗑️ 이 배치 롤백 (${s.total}건 삭제)</button>`;
+  el.innerHTML=html;
+}
+
+async function rollbackBatch(batchId,total){
+  if(!confirm(`배치 "${batchId}" 의 제보 ${total}건과 연결 게시글을 영구 삭제합니다.\n되돌릴 수 없습니다. 진행할까요?`))return;
+  const r=await fdel(API.sns+'/admin/reports/batches/'+encodeURIComponent(batchId));
+  if(r?.success){alert(`롤백 완료: ${r.data.deleted}건 삭제`);loadAdminDataset();}
+  else{alert('롤백 실패: '+(r?.error||'권한/오류'));}
+}
+
+// ═══ 데이터 활용 API: 신청(사용자) / 승인(관리자) ═══
+const DA_SCOPES=[['read:reports','제보 데이터'],['read:datasets','외부 데이터셋'],['read:stats','통계']];
+async function loadDataAccessMe(){
+  const el=document.getElementById('data-access-me');
+  if(!el)return;
+  if(!currentUser){el.style.display='none';return}
+  el.style.display='block';
+  el.innerHTML='<div class="loading">로딩 중...</div>';
+  const r=await f(API.data+'/data-access/requests/me');
+  const reqs=r?.data?.requests||[], keys=r?.data?.keys||[];
+  const stLbl={pending:'⏳ 검토 중',approved:'✅ 승인',rejected:'❌ 거절'};
+  el.innerHTML=`<div class="section"><div class="section-title">🔑 데이터 활용 API 신청</div>
+    <p style="font-size:12px;color:var(--text-muted);margin-bottom:10px">제보·데이터셋을 외부에서 API로 활용하려면 신청 후 관리자 승인을 받으세요. 승인 시 API Key가 발급됩니다.</p>
+    <textarea id="da-purpose" placeholder="활용 목적 (예: 연구용 쓰레기 분포 분석)" style="width:100%;background:var(--bg-input);border:1px solid var(--border);border-radius:8px;padding:8px;color:var(--text-primary);font-size:13px;min-height:54px;margin-bottom:6px"></textarea>
+    <input id="da-org" placeholder="소속 (선택)" style="width:100%;background:var(--bg-input);border:1px solid var(--border);border-radius:8px;padding:8px;color:var(--text-primary);font-size:13px;margin-bottom:6px">
+    <div style="display:flex;gap:12px;flex-wrap:wrap;margin-bottom:8px;font-size:12px">${DA_SCOPES.map(s=>`<label style="display:flex;align-items:center;gap:4px;cursor:pointer"><input type="checkbox" class="da-scope" value="${s[0]}" ${s[0]==='read:reports'?'checked':''}> ${s[1]}</label>`).join('')}</div>
+    <button class="btn btn-primary" onclick="submitDataAccess()">신청하기</button></div>
+    ${reqs.length?`<div class="section"><div class="section-title">내 신청 내역</div>
+      ${reqs.map(q=>`<div style="display:flex;justify-content:space-between;align-items:center;font-size:12px;padding:6px 0;border-bottom:1px solid var(--border)"><span>${(q.purpose||'').slice(0,40)}</span><span>${stLbl[q.status]||q.status}</span></div>`).join('')}</div>`:''}
+    ${keys.length?`<div class="section"><div class="section-title">발급된 API Key</div>
+      ${keys.map(k=>`<div style="font-size:12px;padding:6px 0;border-bottom:1px solid var(--border)"><span style="font-family:monospace">${k.key_prefix}…</span> · ${(k.scopes||[]).join(', ')} · ${k.is_active?'<span style="color:#10b981">활성</span>':'<span style="color:#ef4444">폐기</span>'} · ${k.rate_limit}/시간</div>`).join('')}
+      <p style="font-size:11px;color:var(--text-muted);margin-top:6px">사용: 요청 헤더에 <code>X-API-Key: 평문키</code>. 엔드포인트는 <code>/api/v1/catalog</code> 참고.</p></div>`:''}
+    <div class="section"><div class="section-title">📖 데이터 제공 API 문서</div>
+      <p style="font-size:12px;color:var(--text-muted);margin-bottom:8px">발급받은 API Key를 <code>X-API-Key</code> 헤더에 넣어 호출합니다. 모든 응답에 <code>CC-BY-4.0</code> 라이선스 메타가 포함됩니다.</p>
+      <table class="tbl" style="font-size:11px"><thead><tr><th>엔드포인트</th><th>스코프</th><th>주요 파라미터</th></tr></thead><tbody>
+        <tr><td style="font-family:monospace">GET /api/v1/reports</td><td>read:reports</td><td>format(geojson|json), zone, bbox, <b>updated_since</b>(증분), page, size</td></tr>
+        <tr><td style="font-family:monospace">GET /api/v1/datasets/{batch_id}</td><td>read:datasets</td><td>format(geojson|json)</td></tr>
+        <tr><td style="font-family:monospace">GET /api/v1/catalog</td><td>(키 필요)</td><td>엔드포인트·내 스코프 요약</td></tr>
+      </tbody></table>
+      <p style="font-size:11px;color:var(--text-muted);margin:8px 0 4px">예시</p>
+      <pre style="background:var(--bg-input);border:1px solid var(--border);border-radius:8px;padding:8px;font-size:11px;overflow-x:auto;white-space:pre-wrap">curl -H "X-API-Key: 발급키" \\
+  "${API.data}/api/v1/reports?format=geojson&updated_since=2026-06-01T00:00:00"</pre>
+      <div style="display:flex;gap:8px;margin-top:10px;flex-wrap:wrap">
+        <a class="btn btn-primary" href="${GW}/api-console" target="_blank" rel="noopener" style="font-size:12px;text-decoration:none">⚡ API 콘솔 (실시간 테스터)</a>
+        <a class="btn" href="${API.data}/docs" target="_blank" rel="noopener" style="font-size:12px;text-decoration:none;background:var(--bg-tertiary);color:var(--text-primary)">Swagger</a>
+        <a class="btn" href="${API.data}/redoc" target="_blank" rel="noopener" style="font-size:12px;text-decoration:none;background:var(--bg-tertiary);color:var(--text-primary)">ReDoc</a>
+      </div></div>`;
+}
+async function submitDataAccess(){
+  const purpose=document.getElementById('da-purpose').value.trim();
+  if(!purpose){alert('활용 목적을 입력하세요');return}
+  const scopes=[...document.querySelectorAll('.da-scope:checked')].map(c=>c.value);
+  const org=document.getElementById('da-org').value.trim();
+  const r=await fp(API.data+'/data-access/requests',{purpose,organization:org,scopes});
+  if(r?.success){alert('신청 완료. 관리자 승인을 기다려주세요.');loadDataAccessMe();}
+  else alert('신청 실패: '+(r?.error||'오류'));
+}
+// ═══ 수거 인증 ═══
+let _cleanupFile=null;
+function openCleanupModal(reportId){
+  if(!currentUser){showToast('로그인이 필요합니다');openModal('login');return}
+  _cleanupFile=null;
+  document.getElementById('cleanup-report-id').value=reportId;
+  document.getElementById('cleanup-file').value='';
+  document.getElementById('cleanup-note').value='';
+  const pv=document.getElementById('cleanup-preview');pv.style.display='none';pv.innerHTML='';
+  document.getElementById('cleanup-modal').classList.add('open');
+}
+function closeCleanupModal(){document.getElementById('cleanup-modal').classList.remove('open')}
+function previewCleanup(input){
+  const fobj=input.files&&input.files[0];
+  if(!fobj)return;
+  _cleanupFile=fobj;
+  const pv=document.getElementById('cleanup-preview');
+  pv.style.display='block';
+  pv.innerHTML=`<img src="${URL.createObjectURL(fobj)}" style="width:100%;max-height:200px;object-fit:cover;border-radius:10px">`;
+}
+async function submitCleanup(){
+  const reportId=document.getElementById('cleanup-report-id').value;
+  if(!_cleanupFile){alert('수거 후 사진을 선택하세요');return}
+  const btn=document.getElementById('cleanup-submit-btn');
+  btn.disabled=true;btn.textContent='업로드 중...';
+  try{
+    const fd=new FormData();
+    fd.append('after',_cleanupFile);
+    fd.append('note',document.getElementById('cleanup-note').value||'');
+    const r=await fetch(API.sns+'/reports/'+reportId+'/cleanup',{method:'POST',headers:authToken?{'Authorization':'Bearer '+authToken}:{},body:fd}).then(r=>r.json());
+    if(r?.success){
+      closeCleanupModal();
+      showToast(`수거 완료! +${r.data.xp_earned} XP 🎉`);
+      if(r.data.new_badges&&r.data.new_badges.length)setTimeout(()=>showToast(`🏅 새 배지 획득: ${r.data.new_badges.length}개!`),1400);
+      if(typeof loadZones==='function')loadZones();
+    }else alert('수거 인증 실패: '+(r?.error||'오류'));
+  }catch(e){alert('업로드 오류: '+e.message)}
+  finally{btn.disabled=false;btn.textContent='수거 인증'}
+}
+
+// 관리자 수거 검수 — 최근 수거 목록 + 철회
+async function loadAdminCleanups(){
+  const el=document.getElementById('admin-cleanups');
+  if(!el||!currentUser||currentUser.role!=='admin')return;
+  const r=await f(API.sns+'/admin/cleanups');
+  const rows=r?.data||[];
+  el.innerHTML=`<div class="section"><div class="section-title">🧹 수거 검수 (최근 ${rows.length})</div>
+    ${rows.length?rows.map(c=>`<div style="display:flex;gap:8px;align-items:center;padding:8px 0;border-bottom:1px solid var(--border);font-size:12px">
+      ${c.after_image?`<img src="${c.after_image}" style="width:44px;height:44px;border-radius:6px;object-fit:cover" onerror="this.style.display='none'">`:''}
+      <div style="flex:1;min-width:0"><b>${c.cleaner||'-'}</b> · ${TRASH_LABELS[c.trash_type]||c.trash_type} · +${c.points_awarded}XP
+      <div style="color:var(--text-muted)">${c.completed_at?timeAgo(c.completed_at):''} · ${c.verified?'<span style="color:#10b981">인증</span>':'<span style="color:#ef4444">철회됨</span>'}</div></div>
+      ${c.verified?`<button class="btn" style="padding:3px 10px;font-size:11px;background:#ef4444;color:#fff" onclick="revokeCleanup('${c.id}')">철회</button>`:''}</div>`).join(''):'<p style="font-size:12px;color:var(--text-muted)">수거 기록이 없습니다.</p>'}</div>`;
+}
+async function revokeCleanup(id){
+  if(!confirm('이 수거 인증을 철회할까요? (제보가 미완료로 복귀하고 지급 XP가 회수됩니다)'))return;
+  const r=await fp(API.sns+'/admin/cleanups/'+id+'/revoke',{});
+  if(r?.success)loadAdminCleanups(); else alert('철회 실패: '+(r?.error||'오류'));
+}
+
+// 관리자 API 플랫폼 — 신청 현황·발급 현황·사용 내역 + 승인/거절/폐기
+async function loadAdminApi(){
+  const el=document.getElementById('admin-api');
+  if(!el)return;
+  if(!currentUser||currentUser.role!=='admin'){el.innerHTML='<div style="color:#ef4444;padding:20px">관리자 권한 필요</div>';return}
+  el.innerHTML='<div class="loading">로딩 중...</div>';
+  const [s,reqR,keyR]=await Promise.all([
+    f(API.data+'/admin/data-access/stats'),
+    f(API.data+'/admin/data-access/requests?status=all'),
+    f(API.data+'/admin/data-access/keys'),
+  ]);
+  if(!s?.success){el.innerHTML='<div style="color:#ef4444;padding:20px">조회 실패(권한/서비스)</div>';return}
+  const d=s.data, reqs=reqR?.data||[], keys=keyR?.data||[];
+  const pending=reqs.filter(q=>q.status==='pending');
+  const stLbl={pending:'⏳ 대기',approved:'✅ 승인',rejected:'❌ 거절'};
+  const card=(v,l)=>`<div class="card"><div class="card-val">${v}</div><div class="card-label">${l}</div></div>`;
+  el.innerHTML=`
+    <div class="section" style="margin-bottom:12px"><div class="section-title">신청 현황</div>
+      <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(80px,1fr));gap:8px">
+        ${card(d.requests.total,'총 신청')}${card(d.requests.pending,'대기')}${card(d.requests.approved,'승인')}${card(d.requests.rejected,'거절')}</div></div>
+    <div class="section" style="margin-bottom:12px"><div class="section-title">발급 현황</div>
+      <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(80px,1fr));gap:8px">
+        ${card(d.keys.total,'총 키')}${card(d.keys.active,'활성')}${card(d.keys.revoked,'폐기')}</div></div>
+    <div class="section" style="margin-bottom:12px"><div class="section-title">사용 내역 (호출 수)</div>
+      <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(80px,1fr));gap:8px">
+        ${card(d.usage.total,'누적')}${card(d.usage.last_24h,'24시간')}${card(d.usage.last_1h,'1시간')}</div>
+      ${d.top_endpoints.length?`<div style="font-size:11px;margin-top:8px"><b>상위 엔드포인트</b><br>${d.top_endpoints.map(e=>`<span style="font-family:monospace;color:var(--text-muted)">${e.path}</span> ${e.cnt}`).join(' · ')}</div>`:''}
+      ${d.top_keys.filter(k=>k.cnt>0).length?`<div style="font-size:11px;margin-top:6px"><b>키별 사용</b><br>${d.top_keys.filter(k=>k.cnt>0).map(k=>`${k.username||'-'}(${k.key_prefix}…) ${k.cnt}회`).join(' · ')}</div>`:''}</div>
+    <div class="section" style="margin-bottom:12px"><div class="section-title">승인 대기 (${pending.length})</div>
+      ${pending.length?pending.map(q=>`<div style="padding:8px 0;border-bottom:1px solid var(--border);font-size:12px">
+        <div><b>${q.username}</b> · ${q.organization||'-'} · ${(q.requested_scopes||[]).join(', ')}</div>
+        <div style="color:var(--text-muted);margin:3px 0">${q.purpose||''}</div>
+        <div style="display:flex;gap:6px"><button class="btn btn-success" style="padding:3px 10px;font-size:11px" onclick="approveAccess('${q.id}')">승인·키발급</button>
+        <button class="btn" style="padding:3px 10px;font-size:11px;background:#ef4444;color:#fff" onclick="rejectAccess('${q.id}')">거절</button></div></div>`).join(''):'<p style="font-size:12px;color:var(--text-muted)">대기 중인 신청이 없습니다.</p>'}</div>
+    <div class="section"><div class="section-title">발급된 키 (${keys.length})</div>
+      ${keys.length?`<table class="tbl" style="font-size:11px"><thead><tr><th>소유자</th><th>키</th><th>스코프</th><th>사용</th><th>최근</th><th>상태</th><th></th></tr></thead><tbody>
+        ${keys.map(k=>`<tr><td>${k.username||'-'}</td><td style="font-family:monospace">${k.key_prefix}…</td><td>${(k.scopes||[]).join(', ')}</td><td>${k.usage_count}</td><td style="color:var(--text-muted)">${k.last_used_at?timeAgo(k.last_used_at):'-'}</td><td>${k.is_active?'<span style="color:#10b981">활성</span>':'<span style="color:#ef4444">폐기</span>'}</td><td>${k.is_active?`<button class="btn" style="padding:2px 8px;font-size:10px;background:#ef4444;color:#fff" onclick="revokeKey('${k.id}')">폐기</button>`:''}</td></tr>`).join('')}
+      </tbody></table>`:'<p style="font-size:12px;color:var(--text-muted)">발급된 키가 없습니다.</p>'}</div>`;
+}
+async function approveAccess(id){
+  if(!confirm('승인하고 API Key를 발급할까요?'))return;
+  const r=await fp(API.data+'/admin/data-access/requests/'+id+'/approve',{});
+  if(r?.success){prompt('발급된 API Key (이번 한 번만 표시됩니다. 신청자에게 전달하세요):',r.data.api_key_plaintext);loadAdminApi();}
+  else alert('승인 실패: '+(r?.error||'오류'));
+}
+async function rejectAccess(id){
+  if(!confirm('이 신청을 거절할까요?'))return;
+  const r=await fp(API.data+'/admin/data-access/requests/'+id+'/reject',{});
+  if(r?.success)loadAdminApi(); else alert('거절 실패');
+}
+async function revokeKey(id){
+  if(!confirm('이 API Key를 폐기할까요? (해당 키 호출이 즉시 차단됩니다)'))return;
+  const r=await fdel(API.data+'/admin/data-access/keys/'+id);
+  if(r?.success)loadAdminApi(); else alert('폐기 실패');
+}
+
+// 데이터셋 전용 피드 (메인 피드에서 제외된 배치 제보) — /feed?source=external_di
+async function loadDatasetFeed(){
+  const el=document.getElementById('admin-dataset-feed');
+  el.innerHTML='<div class="loading">로딩 중...</div>';
+  const r=await f(API.sns+'/feed?source=external_di&size=30');
+  if(!r?.success){el.innerHTML='';return}
+  el.innerHTML=`<div class="section" style="margin-top:12px"><div class="section-title">데이터셋 제보 (전용) — 최근 ${r.data.length}건</div>
+    ${r.data.map(p=>feedCard(p)).join('')}</div>`;
+}
+
+// 외부 데이터셋 전용 보기 모달 — 전체 사용자 접근 (/feed?source=external_di)
+function openDatasetFeedModal(){
+  document.getElementById('dataset-feed-modal').classList.add('open');
+  loadDatasetFeedModal();
+}
+function closeDatasetFeedModal(){document.getElementById('dataset-feed-modal').classList.remove('open')}
+async function loadDatasetFeedModal(){
+  const el=document.getElementById('dataset-feed-body');
+  el.innerHTML='<div class="loading">로딩 중...</div>';
+  const r=await f(API.sns+'/feed?source=external_di&size=30');
+  if(!r?.success||!r.data.length){el.innerHTML='<div style="color:var(--text-muted);padding:12px">외부 데이터셋 제보가 없습니다.</div>';return}
+  el.innerHTML=r.data.map(p=>feedCard(p)).join('');
 }
 
 async function loadAdmin(){
@@ -6974,6 +7459,38 @@ function openHelpSection(id){
   document.querySelectorAll('.help-fold').forEach(f=>f.classList.remove('open'));
   const el=document.getElementById('help-'+id);
   if(el){el.classList.add('open');el.scrollIntoView({behavior:'smooth',block:'start'})}
+  if(id==='categories')loadCategoryDict();
+}
+
+// 쓰레기 분류 사전 — GET /report-categories (report_categories 테이블 기반)
+let _categoryDictLoaded=false;
+async function loadCategoryDict(){
+  if(_categoryDictLoaded)return;
+  const el=document.getElementById('help-categories-body');
+  if(!el)return;
+  const r=await f(API.sns+'/report-categories');
+  if(!r?.success||!Array.isArray(r.data)){
+    el.innerHTML='<div style="color:var(--text-muted)">사전을 불러오지 못했습니다 <a href="#" onclick="event.preventDefault();loadCategoryDict()" style="color:var(--accent)">다시 시도</a></div>';
+    return;
+  }
+  try{
+    const hmap={normal:'일반수거',recycle:'분리배출',bulk:'대형·수거불가'};
+    const groups={};
+    r.data.forEach(c=>{(groups[c.recycle_group||'기타']=groups[c.recycle_group||'기타']||[]).push(c)});
+    el.innerHTML=Object.entries(groups).map(([g,cats])=>`
+      <div style="margin-bottom:14px">
+        <div style="font-size:12px;font-weight:700;margin-bottom:6px;color:var(--text-secondary)">${g}</div>
+        <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:8px">
+        ${cats.map(c=>`<div style="border:1px solid var(--border);border-left:3px solid ${c.color||'#64748b'};border-radius:8px;padding:8px 10px">
+          <div style="font-size:13px;font-weight:600">${trashIcons[c.key]||'🗑️'} ${c.label_ko}</div>
+          <div style="font-size:10px;color:var(--text-muted);margin-top:3px">${hmap[c.handling]||c.handling||''} · ${c.recyclable?'♻️ 재활용':'일반배출'}${c.is_builtin?'':' · 신규'}</div>
+        </div>`).join('')}
+        </div>
+      </div>`).join('');
+    _categoryDictLoaded=true;  // 렌더 성공 후에만 플래그 — 실패 시 재시도 가능
+  }catch(e){
+    el.innerHTML='<div style="color:var(--text-muted)">사전 표시 오류 <a href="#" onclick="event.preventDefault();loadCategoryDict()" style="color:var(--accent)">다시 시도</a></div>';
+  }
 }
 
 // ═══ DM (Direct Messages) ═══

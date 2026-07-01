@@ -72,46 +72,66 @@ async def nearby_pins(
     lat: float = Query(...),
     lon: float = Query(...),
     radius: int = Query(500, le=50000),
-    size: int = Query(50, le=200),
+    size: int = Query(200, le=5000),
+    include_external: bool = Query(True, description="외부 데이터셋(external_di) 핀 포함 여부"),
 ):
     db = app.state.db
+    ext_tr = "" if include_external else " AND tr.source <> 'external_di'"
+    ext_post = "" if include_external else " AND (tr.source IS DISTINCT FROM 'external_di')"
     # trash_reports 기반 핀
-    rows = await db.fetch("""
-        SELECT tr.id, tr.trash_type, tr.severity, tr.status,
+    rows = await db.fetch(f"""
+        SELECT tr.id, tr.id AS report_id, tr.trash_type, tr.severity, tr.status, tr.source,
             ST_X(tr.location::geometry) AS lon,
             ST_Y(tr.location::geometry) AS lat,
-            tr.created_at,
-            gz.name AS zone_name
+            tr.created_at, tr.image_urls,
+            gz.name AS zone_name,
+            (SELECT p.id FROM posts p
+               WHERE p.report_id = tr.id
+                 AND (p.is_hidden = false OR p.is_hidden IS NULL)
+               ORDER BY p.created_at ASC LIMIT 1) AS post_id
         FROM trash_reports tr
         LEFT JOIN geofence_zones gz ON gz.id = tr.zone_id
         WHERE ST_DWithin(tr.location,
-            ST_SetSRID(ST_MakePoint($1,$2),4326)::geography, $3)
+            ST_SetSRID(ST_MakePoint($1,$2),4326)::geography, $3){ext_tr}
         ORDER BY tr.created_at DESC LIMIT $4
     """, lon, lat, radius, size)
     result = [dict(r) for r in rows]
 
-    # SNS 제보 게시글 (post_type='report', 위치 있는 것)도 포함
-    post_rows = await db.fetch("""
-        SELECT p.id, 'general' AS trash_type, 'mid' AS severity, 'pending' AS status,
+    # SNS 제보 게시글 (post_type='report', 위치 있는 것)도 포함 — 연결된 trash_report의 실제 분류 사용
+    post_rows = await db.fetch(f"""
+        SELECT p.id,
+            p.id AS post_id,
+            p.report_id,
+            COALESCE(tr.source, 'sns') AS source,
+            COALESCE(tr.trash_type, 'general') AS trash_type,
+            COALESCE(tr.severity, 'mid') AS severity,
+            COALESCE(tr.status, 'pending') AS status,
             ST_X(p.location::geometry) AS lon,
             ST_Y(p.location::geometry) AS lat,
-            p.created_at,
+            p.created_at, p.image_urls,
             gz.name AS zone_name
         FROM posts p
         LEFT JOIN geofence_zones gz ON gz.id = p.zone_id
+        LEFT JOIN trash_reports tr ON tr.id = p.report_id
         WHERE p.post_type = 'report'
           AND p.location IS NOT NULL
           AND (p.is_hidden = false OR p.is_hidden IS NULL)
           AND ST_DWithin(p.location,
-              ST_SetSRID(ST_MakePoint($1,$2),4326)::geography, $3)
+              ST_SetSRID(ST_MakePoint($1,$2),4326)::geography, $3){ext_post}
         ORDER BY p.created_at DESC LIMIT $4
     """, lon, lat, radius, size)
 
-    # 중복 제거 (같은 id가 있으면 trash_reports 우선)
-    existing_ids = {str(r['id']) for r in result}
+    # 중복 제거 — 같은 제보(trash_report)가 'report 핀'과 'post 핀'으로
+    # 이중 표시되는 것을 방지. 위 report 핀(result)은 post_id를 이미 보유하므로
+    # 우선 채택하고, 그 제보와 연결된 post 핀은 건너뛴다.
+    # (위치 없는 trash_report에 달린 post 핀만 추가로 표시됨)
+    shown_report_ids = {str(r['id']) for r in result}
     for pr in post_rows:
-        if str(pr['id']) not in existing_ids:
-            result.append(dict(pr))
+        prd = dict(pr)
+        rid = prd.get('report_id')  # 응답에 유지(수거 인증용), dedup 판정에만 사용
+        if rid and str(rid) in shown_report_ids:
+            continue
+        result.append(prd)
 
     return {"success": True, "data": result}
 
@@ -124,7 +144,7 @@ async def recent_pins(size: int = Query(50, le=200)):
         SELECT tr.id, tr.trash_type, tr.severity, tr.status,
             ST_X(tr.location::geometry) AS lon,
             ST_Y(tr.location::geometry) AS lat,
-            tr.created_at,
+            tr.created_at, tr.image_urls,
             gz.name AS zone_name,
             u.username, u.display_name
         FROM trash_reports tr

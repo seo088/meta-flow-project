@@ -146,3 +146,62 @@ async def grant_xp(db, redis, user_id: str, delta: int, reason: str,
         if logger:
             logger.error(f"[grant_xp] FAILED: {user_id} +{delta} ({reason}): {e}")
         return 0, False
+
+
+# 배지 희귀도별 보상 XP
+BADGE_XP = {"common": 20, "rare": 50, "epic": 100, "legendary": 200}
+
+
+async def check_and_award_badges(db, redis, user_id, kafka=None, logger=None):
+    """업적 기준 충족 시 미보유 배지 자동 수여 + badge_earn XP. 신규 수여 badge_key 리스트 반환."""
+    try:
+        s = await db.fetchrow("""
+            SELECT
+              (SELECT count(*) FROM trash_reports WHERE reporter_id=$1::uuid) AS reports,
+              (SELECT count(*) FROM cleanups WHERE cleaner_id=$1::uuid AND verified) AS cleanups,
+              (SELECT count(*) FROM cleanups c JOIN trash_reports tr ON tr.id=c.report_id
+                 JOIN geofence_zones gz ON gz.id=tr.zone_id
+                 WHERE c.cleaner_id=$1::uuid AND c.verified AND gz.zone_key='EUNPA') AS eunpa,
+              (SELECT count(*) FROM cleanups c JOIN trash_reports tr ON tr.id=c.report_id
+                 JOIN geofence_zones gz ON gz.id=tr.zone_id
+                 WHERE c.cleaner_id=$1::uuid AND c.verified AND gz.zone_key='SAEMANGEUM') AS saemangeum,
+              (SELECT count(*) FROM cleanups c JOIN trash_reports tr ON tr.id=c.report_id
+                 JOIN geofence_zones gz ON gz.id=tr.zone_id
+                 WHERE c.cleaner_id=$1::uuid AND c.verified AND gz.zone_key='GEUMGANG') AS geumgang,
+              COALESCE((SELECT SUM(delta) FROM point_ledger WHERE user_id=$1::uuid),0) AS xp
+        """, user_id)
+        earned = {
+            "first_report": s["reports"] >= 1,
+            "report_5": s["reports"] >= 5,
+            "report_20": s["reports"] >= 20,
+            "cleanup_first": s["cleanups"] >= 1,
+            "cleanup_10": s["cleanups"] >= 10,
+            "eunpa_guardian": s["eunpa"] >= 5,
+            "saemangeum_warrior": s["saemangeum"] >= 1,
+            "geumgang_ranger": s["geumgang"] >= 1,
+            "eco_legend": s["xp"] >= 10000,
+        }
+        keys = [k for k, v in earned.items() if v]
+        if not keys:
+            return []
+        rows = await db.fetch("""
+            SELECT bd.id, bd.badge_key, bd.rarity FROM badge_definitions bd
+            WHERE bd.badge_key = ANY($2::text[])
+              AND NOT EXISTS (SELECT 1 FROM user_badges ub
+                  WHERE ub.user_id=$1::uuid AND ub.badge_id=bd.id)
+        """, user_id, keys)
+        new_badges = []
+        for r in rows:
+            await db.execute(
+                "INSERT INTO user_badges(user_id, badge_id) VALUES($1::uuid,$2) ON CONFLICT DO NOTHING",
+                user_id, r["id"])
+            await grant_xp(db, redis, user_id, BADGE_XP.get(r["rarity"], 20),
+                           "badge_earn", ref_id=str(r["id"]), kafka=kafka, logger=logger)
+            new_badges.append(r["badge_key"])
+        if new_badges and logger:
+            logger.info(f"[badge] 수여 {user_id} → {new_badges}")
+        return new_badges
+    except Exception as e:
+        if logger:
+            logger.warning(f"[check_and_award_badges] {user_id}: {e}")
+        return []
