@@ -2,6 +2,7 @@
 Data Service — Elasticsearch 집계·시계열 통계·공공데이터 API.
 포트: DATA_PORT 환경변수 (기본 8505)
 """
+import json
 import os
 import sys
 from datetime import datetime
@@ -430,24 +431,123 @@ async def api_catalog(principal: dict = Depends(get_api_key_principal)):
         "endpoints": [
             {"path": "/api/v1/reports", "scope": "read:reports",
              "params": {"format": "geojson|json", "zone": "zone_key", "bbox": "minLon,minLat,maxLon,maxLat",
-                        "updated_since": "ISO8601 (증분)", "page": "int", "size": "int<=1000"}},
+                        "updated_since": "ISO8601 (incremental)", "trash_type": "plastic|paper|glass|...",
+                        "trash_size": "small|medium|large", "handling": "normal|recycle|bulk",
+                        "has_image": "true|false", "has_location": "true|false", "source": "sns|external_di",
+                        "include_items": "true|false", "page": "int", "size": "int<=1000"},
+             "fields": ["trash_type", "trash_size", "handling", "image_urls", "primary_image_url",
+                        "location", "photo_location", "items"]},
             {"path": "/api/v1/datasets/{batch_id}", "scope": "read:datasets",
-             "params": {"format": "geojson|json"}},
+             "params": {"format": "geojson|json", "include_items": "true|false"},
+             "fields": ["trash_type", "trash_size", "handling", "image_urls", "primary_image_url",
+                        "location", "photo_location", "items"]},
         ],
         "auth": "X-API-Key 헤더", "license": "CC-BY-4.0", "openapi": "/docs",
     }}
 
 
-def _reports_to_payload(rows, fmt):
+def _jsonish(value):
+    if value is None:
+        return None
+    if isinstance(value, (dict, list)):
+        return value
+    if isinstance(value, str):
+        try:
+            return json.loads(value)
+        except json.JSONDecodeError:
+            return None
+    return None
+
+
+def _report_items(gt_label):
+    payload = _jsonish(gt_label) or {}
+    items = payload.get("items")
+    return items if isinstance(items, list) else []
+
+
+def _primary_item(items):
+    if not items:
+        return {}
+    severity_rank = {"urgent": 3, "high": 2, "medium": 1, "low": 0}
+    size_rank = {"large": 3, "medium": 2, "small": 1}
+
+    def quantity(item):
+        try:
+            return int(item.get("quantity") or 0)
+        except (TypeError, ValueError):
+            return 0
+
+    return max(
+        (item for item in items if isinstance(item, dict)),
+        key=lambda item: (
+            severity_rank.get(str(item.get("severity", "")).lower(), -1),
+            size_rank.get(str(item.get("size", "")).lower(), -1),
+            quantity(item),
+        ),
+        default={},
+    )
+
+
+def _point(lat, lon):
+    if lat is None or lon is None:
+        return None
+    try:
+        return {"lat": float(lat), "lon": float(lon)}
+    except (TypeError, ValueError):
+        return None
+
+
+def _photo_location(row, gt_label):
+    payload = _jsonish(gt_label) or {}
+    geo = payload.get("geo") if isinstance(payload.get("geo"), dict) else {}
+    if geo.get("lat") is not None and geo.get("lon") is not None:
+        point = _point(geo.get("lat"), geo.get("lon"))
+        if point:
+            return {**point, "source": geo.get("from") or "gt_label"}
+    point = _point(row.get("lat"), row.get("lon"))
+    if point:
+        return {**point, "source": "report_location"}
+    return None
+
+
+def _normalize_report(row, include_items=True):
+    item_list = _report_items(row.get("gt_label"))
+    primary = _primary_item(item_list)
+    image_urls = row.get("image_urls") or []
+    if isinstance(image_urls, str):
+        image_urls = [image_urls]
+    payload = {
+        "id": str(row.get("id")),
+        "trash_type": row.get("trash_type"),
+        "trash_size": primary.get("size"),
+        "severity": row.get("severity") or primary.get("severity"),
+        "handling": row.get("handling") or primary.get("handling"),
+        "status": row.get("status"),
+        "source": row.get("source"),
+        "created_at": row.get("created_at"),
+        "zone_key": row.get("zone_key"),
+        "image_urls": image_urls,
+        "primary_image_url": image_urls[0] if image_urls else None,
+        "location": _point(row.get("lat"), row.get("lon")),
+        "photo_location": _photo_location(row, row.get("gt_label")),
+    }
+    if include_items:
+        payload["items"] = item_list
+    return payload
+
+
+def _reports_to_payload(rows, fmt, include_items=True):
+    fmt = (fmt or "geojson").lower()
+    data = [_normalize_report(dict(row), include_items=include_items) for row in rows]
     if fmt == "geojson":
         return {"type": "FeatureCollection",
                 "features": [{"type": "Feature",
-                              "geometry": {"type": "Point", "coordinates": [r["lon"], r["lat"]]},
-                              "properties": {k: v for k, v in dict(r).items() if k not in ("lat", "lon")}}
-                             for r in rows if r["lon"] is not None],
-                "metadata": {"count": len(rows), "license": "CC-BY-4.0", "source": "meta-plogging-gunsan",
+                              "geometry": {"type": "Point", "coordinates": [item["location"]["lon"], item["location"]["lat"]]},
+                              "properties": {k: v for k, v in item.items() if k != "location"}}
+                             for item in data if item.get("location") is not None],
+                "metadata": {"count": len(data), "license": "CC-BY-4.0", "source": "meta-plogging-gunsan",
                              "generated_at": datetime.utcnow().isoformat()}}
-    return {"success": True, "count": len(rows), "data": [dict(r) for r in rows]}
+    return {"success": True, "count": len(data), "data": data}
 
 
 @app.get("/api/v1/reports", tags=["제공 API (v1)"], summary="제보 데이터 제공 (전량/증분, GeoJSON·JSON)")
@@ -457,15 +557,43 @@ async def api_reports(
     zone: Optional[str] = Query(None),
     bbox: Optional[str] = Query(None),
     updated_since: Optional[str] = Query(None),
+    trash_type: Optional[str] = Query(None),
+    trash_size: Optional[str] = Query(None, pattern="^(small|medium|large)$"),
+    handling: Optional[str] = Query(None, pattern="^(normal|recycle|bulk)$"),
+    has_image: Optional[bool] = Query(None),
+    has_location: Optional[bool] = Query(None),
+    source: Optional[str] = Query(None),
+    include_items: bool = Query(True),
     page: int = Query(1, ge=1),
     size: int = Query(500, le=1000),
     principal: dict = Depends(require_scope("read:reports")),
 ):
     """제보 데이터 제공 — 전량+증분(updated_since), zone/bbox 필터, GeoJSON/JSON."""
-    conds = ["tr.source != 'unity_sim'", "tr.location IS NOT NULL"]
+    fmt = (format or "geojson").lower()
+    conds = ["tr.source != 'unity_sim'"]
     args = []
+    if fmt == "geojson" or has_location is True:
+        conds.append("tr.location IS NOT NULL")
+    elif has_location is False:
+        conds.append("tr.location IS NULL")
     if zone:
         args.append(zone); conds.append(f"gz.zone_key = ${len(args)}")
+    if trash_type:
+        args.append(trash_type); conds.append(f"tr.trash_type = ${len(args)}")
+    if trash_size:
+        args.append(trash_size)
+        conds.append(
+            f"EXISTS (SELECT 1 FROM jsonb_array_elements(COALESCE(tr.gt_label->'items', '[]'::jsonb)) item "
+            f"WHERE item->>'size' = ${len(args)})"
+        )
+    if handling:
+        args.append(handling); conds.append(f"COALESCE(tr.handling, tr.gt_label->>'handling') = ${len(args)}")
+    if source:
+        args.append(source); conds.append(f"tr.source = ${len(args)}")
+    if has_image is True:
+        conds.append("COALESCE(array_length(tr.image_urls, 1), 0) > 0")
+    elif has_image is False:
+        conds.append("COALESCE(array_length(tr.image_urls, 1), 0) = 0")
     if updated_since:
         try:
             args.append(datetime.fromisoformat(updated_since)); conds.append(f"tr.created_at >= ${len(args)}")
@@ -481,34 +609,39 @@ async def api_reports(
         conds.append(f"ST_Within(tr.location::geometry, ST_MakeEnvelope(${i-3},${i-2},${i-1},${i},4326))")
     args.extend([size, (page - 1) * size])
     rows = await app.state.db.fetch(f"""
-        SELECT tr.id, tr.trash_type, tr.severity, tr.status, tr.source,
+        SELECT tr.id::text AS id, tr.trash_type, tr.severity,
+               COALESCE(tr.handling, tr.gt_label->>'handling') AS handling,
+               tr.status, tr.source, tr.image_urls, tr.gt_label,
                ST_X(tr.location::geometry) AS lon, ST_Y(tr.location::geometry) AS lat,
                tr.created_at::text, gz.zone_key
         FROM trash_reports tr LEFT JOIN geofence_zones gz ON gz.id = tr.zone_id
         WHERE {' AND '.join(conds)}
         ORDER BY tr.created_at DESC LIMIT ${len(args)-1} OFFSET ${len(args)}
     """, *args)
-    return _reports_to_payload(rows, format)
+    return _reports_to_payload(rows, fmt, include_items=include_items)
 
 
 @app.get("/api/v1/datasets/{batch_id}", tags=["제공 API (v1)"], summary="외부 데이터셋 배치 단위 제공")
 async def api_dataset(
     batch_id: str,
     format: str = Query("geojson"),
+    include_items: bool = Query(True),
     principal: dict = Depends(require_scope("read:datasets")),
 ):
     """외부 데이터셋 배치 단위 제공."""
     rows = await app.state.db.fetch("""
-        SELECT tr.id, tr.trash_type, tr.severity, tr.handling, tr.status,
+        SELECT tr.id::text AS id, tr.trash_type, tr.severity,
+               COALESCE(tr.handling, tr.gt_label->>'handling') AS handling,
+               tr.status, tr.source, tr.image_urls, tr.gt_label,
                ST_X(tr.location::geometry) AS lon, ST_Y(tr.location::geometry) AS lat,
-               tr.created_at::text, tr.gt_label
-        FROM trash_reports tr
+               tr.created_at::text, gz.zone_key
+        FROM trash_reports tr LEFT JOIN geofence_zones gz ON gz.id = tr.zone_id
         WHERE tr.source='external_di' AND tr.gt_label->>'ingested_batch' = $1
         ORDER BY tr.created_at DESC
     """, batch_id)
     if not rows:
         raise HTTPException(404, "배치를 찾을 수 없습니다")
-    return _reports_to_payload(rows, format)
+    return _reports_to_payload(rows, format, include_items=include_items)
 
 
 if __name__ == "__main__":

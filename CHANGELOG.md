@@ -50,3 +50,9 @@
 - `C:/Users/jwon/Downloads/meta-flow-main/meta-flow-main` 원본과 현재 작업 트리의 코드 동기화 상태를 비교
 - 공통 코드 파일은 모두 동일함을 확인하고, 실제 차이는 보안상 placeholder를 유지해야 하는 `GITLAB_TUTORIAL.md`와 런타임 업로드 경로 `platform/apps/web/avatars/`뿐임을 기록
 - 원본의 실제 GitLab 토큰 문자열과 사용자 업로드 아바타 파일은 코드 동기화 대상에서 제외
+
+### [2026-07-21 17:16:39]
+- 교수님 요청사항에 맞춰 데이터 제공 API가 쓰레기 크기 분류, 사진 URL, 대표 사진 URL, 제보 위치, 사진 위치를 함께 반환하도록 확장
+- `/api/v1/reports`에 `trash_type`, `trash_size`, `handling`, `has_image`, `has_location`, `source`, `include_items` 입력 조건을 추가
+- `/api/v1/datasets/{batch_id}` 응답도 동일한 사진/위치/크기 분류 구조로 정규화하고 API 콘솔 테스트 입력을 보강
+- Python 문법 검증, API 콘솔 스크립트 검증, `git diff --check`를 완료

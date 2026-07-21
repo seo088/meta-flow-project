@@ -473,6 +473,12 @@ SNS_PORT=8501
 | v0.0.12 | 2026-06-24 | Docker 컨테이너화 인프라 추가 — 6-Layer 전체 스택 docker-compose(gateway/sns/game/gis/ai/mcp + postgres/redis/kafka/zookeeper/minio + elasticsearch profile=search), python:3.11-slim 멀티스테이지 Dockerfile(서비스별 CMD 분기), .env.docker.example 환경변수 템플릿+통합 requirements.txt+.dockerignore, DOCKER.md 빌드/배포 가이드, .gitignore 대용량 데이터셋·db_backup·avatars·worktrees 제외 규칙. 외부 데이터셋 적재 ADR-003 문서화 + dataset-ingest 서브에이전트 정의 추가. 서비스 코드 변경 없음(인프라/문서 전용) |
 | v0.0.11 | 2026-06-01 | 외부 DI 데이터셋 배치 적재(1035건, merged_records.json 정답라벨+좌표, SHA-256 멱등), 다축 쓰레기 분류체계(품목 9종/크기/수거구분 handling/긴급성 자동산출 — trash_taxonomy.py SSOT), 신규 카테고리 6종(담배꽁초·종이·비닐·캔금속·유리·스티로폼)+report_categories 테이블+gt_label jsonb, 내부 적재 API(/admin/reports/ingest·ingest-batch, 업로드/URL 참조 모드, shared/core/ingest.py), dataset_bot 시스템계정, 배치 제보 메인피드 제외+전용 탭(/feed?source=external_di), 현황 카테고리 동적화+제보 사진 썸네일(GIS pins image_urls), 관리자 데이터셋 탭(배치 진행/통계), 도움말 쓰레기 분류 사전, 댓글 멘션 작성자 자동완성 수정, EUNPA 구역 서편 확장(은파호수 일대 포함) |
 
+### 데이터 제공 API 응답 확장
+
+- `GET /api/v1/reports`는 외부 요청 대응을 위해 `trash_size`, `handling`, `image_urls`, `primary_image_url`, `location`, `photo_location`, `items`를 제공한다.
+- 추가 입력 조건: `trash_type`, `trash_size`, `handling`, `has_image`, `has_location`, `source`, `include_items`.
+- `GET /api/v1/datasets/{batch_id}`도 동일한 사진/위치/크기 분류 응답 구조를 사용하며, `include_items=false`로 세부 라벨 목록을 생략할 수 있다.
+
 ---
 
 ## 17. v0.0.6 주요 변경 사항

@@ -132,16 +132,24 @@ const BATCHES = ['2026-06-01-di-full','2026-06-01-di-verify10'];
 const ENDPOINTS = [
   {id:'health', method:'GET', path:'/health', scope:'(공개)', desc:'서비스 상태 점검 (인증 불필요)', kw:'상태 헬스 health 점검', params:[]},
   {id:'reports', method:'GET', path:'/api/v1/reports', scope:'read:reports',
-   desc:'제보 데이터 제공 (전량/증분, GeoJSON·JSON)', kw:'제보 reports 데이터 geojson 증분', params:[
+   desc:'제보 데이터 제공 (전량/증분, GeoJSON·JSON)', kw:'제보 reports 데이터 geojson 증분 사진 위치 크기', params:[
      {name:'format', kind:'select', opts:['geojson','json'], def:'geojson'},
      {name:'zone', kind:'auto', list:'dl-zone', ph:'구역 키 (자동완성)'},
      {name:'bbox', kind:'text', ph:'minLon,minLat,maxLon,maxLat'},
      {name:'updated_since', kind:'text', ph:'2026-06-01T00:00:00 (증분)'},
+     {name:'trash_type', kind:'text', ph:'plastic, paper, vinyl...'},
+     {name:'trash_size', kind:'select', opts:['','small','medium','large'], def:''},
+     {name:'handling', kind:'select', opts:['','normal','recycle','bulk'], def:''},
+     {name:'has_image', kind:'select', opts:['','true','false'], def:''},
+     {name:'has_location', kind:'select', opts:['','true','false'], def:''},
+     {name:'source', kind:'select', opts:['','sns','external_di'], def:''},
+     {name:'include_items', kind:'select', opts:['true','false'], def:'true'},
      {name:'size', kind:'number', def:'20'},
    ]},
   {id:'datasets', method:'GET', path:'/api/v1/datasets/{batch_id}', scope:'read:datasets',
-   desc:'외부 데이터셋 배치 단위 제공', kw:'데이터셋 datasets 배치 batch', pathParams:[{name:'batch_id', list:'dl-batch', ph:'배치 ID (자동완성)'}], params:[
+   desc:'외부 데이터셋 배치 단위 제공', kw:'데이터셋 datasets 배치 batch 사진 위치 크기', pathParams:[{name:'batch_id', list:'dl-batch', ph:'배치 ID (자동완성)'}], params:[
      {name:'format', kind:'select', opts:['geojson','json'], def:'geojson'},
+     {name:'include_items', kind:'select', opts:['true','false'], def:'true'},
    ]},
   {id:'catalog', method:'GET', path:'/api/v1/catalog', scope:'(키 필요)',
    desc:'엔드포인트·내 스코프 요약', kw:'카탈로그 catalog 목록 스코프', params:[]},
