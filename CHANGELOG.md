@@ -45,3 +45,8 @@
 - v0.2.0의 게이미피케이션 완성, 지도 개편, API 개발자 도구, Docker/운영 문서, ADR 및 세션 문서를 원본 우선으로 반영
 - 대상 저장소 전용 작업 규칙과 로컬 이력인 `AGENTS.md`, `CHANGELOG.md`, `Calculator_test/`는 보존하고 HTML 스크립트 구문 검증을 완료
 - GitHub Push Protection에서 감지한 `GITLAB_TUTORIAL.md`의 실제 GitLab 토큰 예시를 placeholder로 치환
+
+### [2026-07-21 17:00:14]
+- `C:/Users/jwon/Downloads/meta-flow-main/meta-flow-main` 원본과 현재 작업 트리의 코드 동기화 상태를 비교
+- 공통 코드 파일은 모두 동일함을 확인하고, 실제 차이는 보안상 placeholder를 유지해야 하는 `GITLAB_TUTORIAL.md`와 런타임 업로드 경로 `platform/apps/web/avatars/`뿐임을 기록
+- 원본의 실제 GitLab 토큰 문자열과 사용자 업로드 아바타 파일은 코드 동기화 대상에서 제외
