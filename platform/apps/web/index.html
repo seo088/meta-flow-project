@@ -897,9 +897,9 @@ body{font-family:'Pretendard Variable',Pretendard,-apple-system,BlinkMacSystemFo
   <div id="profile-tab-dms" style="display:none;max-width:640px;margin:0 auto">
     <h3 style="font-size:16px;font-weight:700;margin-bottom:12px">💬 메시지함</h3>
     <div id="dm-conversations-list"><div class="loading">로딩 중...</div></div>
+    <!-- 데이터 활용 API 신청 (메시지함 탭에서만 표시) -->
+    <div id="data-access-me" style="margin:18px 0 0;display:none"></div>
   </div>
-  <!-- 데이터 활용 API 신청 (전체 로그인 사용자) -->
-  <div id="data-access-me" style="max-width:640px;margin:18px auto 0;display:none"></div>
 </div>
 
 <!-- POST (single post permalink) -->
@@ -3502,7 +3502,6 @@ function showTab(n){
   if(n==='drone')loadDrone();
   if(n==='data')loadDataStats();
   if(n==='admin')loadAdmin();
-  if(n==='profile')loadDataAccessMe();
   if(n==='notifications')loadNotificationsPage();
   // arch → admin > system으로 통합됨
 }
@@ -8008,6 +8007,7 @@ function switchProfileTab(tab){
     btnD.style.background='var(--accent)';btnD.style.color='#fff';
     btnT.style.background='var(--bg-secondary)';btnT.style.color='var(--text-muted)';
     loadDmConversations();
+    loadDataAccessMe();
   }
 }
 
