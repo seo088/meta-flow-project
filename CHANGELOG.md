@@ -56,3 +56,8 @@
 - `/api/v1/reports`에 `trash_type`, `trash_size`, `handling`, `has_image`, `has_location`, `source`, `include_items` 입력 조건을 추가
 - `/api/v1/datasets/{batch_id}` 응답도 동일한 사진/위치/크기 분류 구조로 정규화하고 API 콘솔 테스트 입력을 보강
 - Python 문법 검증, API 콘솔 스크립트 검증, `git diff --check`를 완료
+
+### [2026-07-22 14:35:00]
+- 166번 `hong` 정적 프리뷰(`:8600`)에서 프로필의 API 콘솔 버튼이 운영 포트 `:8500`으로 이동하던 링크 문제를 수정
+- 프리뷰 환경에서는 `/api-console.html`로 이동하고, 운영 게이트웨이 환경에서는 기존 `/api-console`로 이동하도록 분기 처리
+- 프로필의 데이터 제공 API 문서 표에 `trash_size`, `has_image`, `has_location`, `include_items` 등 신규 파라미터 요약을 반영

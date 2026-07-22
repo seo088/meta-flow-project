@@ -1165,7 +1165,7 @@ body{font-family:'Pretendard Variable',Pretendard,-apple-system,BlinkMacSystemFo
   <div id="admin-view-api" style="display:none">
     <div style="display:flex;gap:8px;margin-bottom:12px">
       <button class="btn btn-primary" onclick="loadAdminApi()" style="font-size:11px">새로고침</button>
-      <button class="btn" onclick="window.open(GW+'/api-console','_blank','noopener')" style="font-size:11px;background:var(--bg-tertiary);color:var(--text-primary)">⚡ API 콘솔</button>
+      <button class="btn" onclick="window.open(API_CONSOLE_URL,'_blank','noopener')" style="font-size:11px;background:var(--bg-tertiary);color:var(--text-primary)">⚡ API 콘솔</button>
     </div>
     <div id="admin-api"><div class="loading">로딩 중...</div></div>
   </div>
@@ -1861,6 +1861,7 @@ body{font-family:'Pretendard Variable',Pretendard,-apple-system,BlinkMacSystemFo
 // ═══ CONFIG ═══
 const H=location.hostname||'203.234.62.176';
 const GW=`http://${H}:8500`;
+const API_CONSOLE_URL=location.port==='8600'?`${location.origin}/api-console.html`:`${GW}/api-console`;
 const API={sns:`${GW}/api/sns`,game:`${GW}/api/game`,gis:`${GW}/api/gis`,ai:`${GW}/api/ai`,data:`${GW}/api/data`,mcp:`${GW}/api/mcp`,ws:`${GW}/api/ws`,drone:`${GW}/api/drone`,dataAgent:`${GW}/api/data-agent`,mobility:`${GW}/api/mobility`,quest:`${GW}/api/quest`};
 // 구역 좌표: 기본값 (DB에서 실시간 갱신됨)
 const ZONE_ICONS={KU_CAMPUS:'🎓',EUNPA:'💧',SAEMANGEUM:'🌊',GEUMGANG:'🌿'};
@@ -6559,15 +6560,15 @@ async function loadDataAccessMe(){
     <div class="section"><div class="section-title">📖 데이터 제공 API 문서</div>
       <p style="font-size:12px;color:var(--text-muted);margin-bottom:8px">발급받은 API Key를 <code>X-API-Key</code> 헤더에 넣어 호출합니다. 모든 응답에 <code>CC-BY-4.0</code> 라이선스 메타가 포함됩니다.</p>
       <table class="tbl" style="font-size:11px"><thead><tr><th>엔드포인트</th><th>스코프</th><th>주요 파라미터</th></tr></thead><tbody>
-        <tr><td style="font-family:monospace">GET /api/v1/reports</td><td>read:reports</td><td>format(geojson|json), zone, bbox, <b>updated_since</b>(증분), page, size</td></tr>
-        <tr><td style="font-family:monospace">GET /api/v1/datasets/{batch_id}</td><td>read:datasets</td><td>format(geojson|json)</td></tr>
+        <tr><td style="font-family:monospace">GET /api/v1/reports</td><td>read:reports</td><td>format, zone, bbox, <b>updated_since</b>, trash_type, trash_size, has_image, has_location, page, size</td></tr>
+        <tr><td style="font-family:monospace">GET /api/v1/datasets/{batch_id}</td><td>read:datasets</td><td>format, include_items</td></tr>
         <tr><td style="font-family:monospace">GET /api/v1/catalog</td><td>(키 필요)</td><td>엔드포인트·내 스코프 요약</td></tr>
       </tbody></table>
       <p style="font-size:11px;color:var(--text-muted);margin:8px 0 4px">예시</p>
       <pre style="background:var(--bg-input);border:1px solid var(--border);border-radius:8px;padding:8px;font-size:11px;overflow-x:auto;white-space:pre-wrap">curl -H "X-API-Key: 발급키" \\
   "${API.data}/api/v1/reports?format=geojson&updated_since=2026-06-01T00:00:00"</pre>
       <div style="display:flex;gap:8px;margin-top:10px;flex-wrap:wrap">
-        <a class="btn btn-primary" href="${GW}/api-console" target="_blank" rel="noopener" style="font-size:12px;text-decoration:none">⚡ API 콘솔 (실시간 테스터)</a>
+        <a class="btn btn-primary" href="${API_CONSOLE_URL}" target="_blank" rel="noopener" style="font-size:12px;text-decoration:none">⚡ API 콘솔 (실시간 테스터)</a>
         <a class="btn" href="${API.data}/docs" target="_blank" rel="noopener" style="font-size:12px;text-decoration:none;background:var(--bg-tertiary);color:var(--text-primary)">Swagger</a>
         <a class="btn" href="${API.data}/redoc" target="_blank" rel="noopener" style="font-size:12px;text-decoration:none;background:var(--bg-tertiary);color:var(--text-primary)">ReDoc</a>
       </div></div>`;
